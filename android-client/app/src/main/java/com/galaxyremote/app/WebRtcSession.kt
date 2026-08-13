@@ -169,21 +169,17 @@ class WebRtcSession(
     }
 
     @Synchronized
-    fun setQuality(preset: String): String {
-        val quality = when (preset.lowercase()) {
-            "data" -> DATA_QUALITY
-            "smooth" -> SMOOTH_QUALITY
-            "clear" -> HIGH_QUALITY
-            else -> BALANCED_QUALITY
-        }
-        val (width, height) = captureSize(quality.shortEdge)
-        videoSource.adaptOutputFormat(width, height, quality.fps)
+    fun setQuality(shortEdge: Int, fps: Int): String {
+        val safeShortEdge = shortEdge.takeIf { it in ALLOWED_SHORT_EDGES } ?: BALANCED_QUALITY.shortEdge
+        val safeFps = fps.takeIf { it in ALLOWED_FRAME_RATES } ?: BALANCED_QUALITY.fps
+        val (width, height) = captureSize(safeShortEdge)
+        videoSource.adaptOutputFormat(width, height, safeFps)
         videoSender?.let { sender ->
             val parameters = sender.parameters
-            parameters.encodings.forEach { it.maxBitrateBps = quality.bitrateBps }
+            parameters.encodings.forEach { it.maxBitrateBps = bitrateFor(safeShortEdge, safeFps) }
             sender.setParameters(parameters)
         }
-        return "${quality.label} · ${width}×${height} · ${quality.fps}fps"
+        return "${width}×${height} · ${safeFps}fps"
     }
 
     fun sendNotice(message: String) {
@@ -345,6 +341,15 @@ class WebRtcSession(
         return even(width * scale) to even(height * scale)
     }
 
+    private fun bitrateFor(shortEdge: Int, fps: Int): Int {
+        val base = when (shortEdge) {
+            540 -> 1_200_000
+            1440 -> 7_000_000
+            else -> 4_500_000
+        }
+        return if (fps == 60) (base * 1.7).toInt() else base
+    }
+
     private inner class PeerObserver : PeerConnection.Observer {
         override fun onSignalingChange(newState: PeerConnection.SignalingState?) = Unit
 
@@ -415,6 +420,8 @@ class WebRtcSession(
         private val BALANCED_QUALITY = Quality("자동", 1080, 30, 4_500_000)
         private val SMOOTH_QUALITY = Quality("부드러움", 1080, 60, 8_000_000)
         private val HIGH_QUALITY = Quality("선명", 1440, 30, 7_000_000)
+        private val ALLOWED_SHORT_EDGES = setOf(540, 1080, 1440)
+        private val ALLOWED_FRAME_RATES = setOf(24, 30, 60)
     }
 }
 
