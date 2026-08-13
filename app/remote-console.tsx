@@ -1192,7 +1192,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               {pairingBusy ? <span className="pair-code-loading"><span className="spinner blue" /> 코드 만드는 중</span> : pairing ? <><strong>{pairing.code.slice(0, 3)} {pairing.code.slice(3)}</strong><small>10분 동안 한 번만 사용할 수 있어요.</small></> : <span>코드를 만들지 못했습니다.</span>}
             </div>
             {pairingError && <p className="modal-error" role="alert">{pairingError}</p>}
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.3-release.apk" download>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.3-fixed-release.apk" download>
               <span aria-hidden="true">↓</span>
               <strong>Galaxy Remote APK 받기</strong>
               <small>Galaxy arm64 v0.4.3 · 15MB · 해상도·프레임 개별 설정 · 자동 연결·길게 누르기 지원</small>
@@ -1236,7 +1236,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 </div>
               )) : <div className="empty-device-list">등록된 기기가 없습니다.</div>}
             </div>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.3-release.apk" download>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.3-fixed-release.apk" download>
               <span aria-hidden="true">↓</span>
               <strong>Galaxy Remote v0.4.3 받기</strong>
               <small>v0.4.0·v0.4.1 위에 바로 설치할 수 있습니다.</small>
