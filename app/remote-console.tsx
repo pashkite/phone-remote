@@ -129,16 +129,19 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
   const intentionalCloseRef = useRef(false);
 
   useEffect(() => {
-    const storedMode = window.localStorage.getItem("galaxy-remote-pc-mode");
-    const mode: PcMode = storedMode === "personal" ? "personal" : "public";
-    setPcMode(mode);
-    if (mode === "personal") {
-      const storedOpacity = Number(window.localStorage.getItem("galaxy-remote-detached-opacity"));
-      if (Number.isFinite(storedOpacity) && storedOpacity >= 20 && storedOpacity <= 100) {
-        setDetachedOpacity(Math.round(storedOpacity));
+    const timer = window.setTimeout(() => {
+      const storedMode = window.localStorage.getItem("galaxy-remote-pc-mode");
+      const mode: PcMode = storedMode === "personal" ? "personal" : "public";
+      setPcMode(mode);
+      if (mode === "personal") {
+        const storedOpacity = Number(window.localStorage.getItem("galaxy-remote-detached-opacity"));
+        if (Number.isFinite(storedOpacity) && storedOpacity >= 20 && storedOpacity <= 100) {
+          setDetachedOpacity(Math.round(storedOpacity));
+        }
       }
-    }
-    setPreferencesLoaded(true);
+      setPreferencesLoaded(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
