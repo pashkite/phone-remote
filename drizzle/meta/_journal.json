@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1784193509938,
+      "tag": "0000_parallel_morlocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784194406632,
+      "tag": "0001_shallow_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784633646182,
+      "tag": "0002_dear_bastion",
+      "breakpoints": true
+    }
+  ]
+}
