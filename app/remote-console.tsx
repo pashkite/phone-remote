@@ -484,7 +484,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       return;
     }
     if (!supportsNotificationApproval(selectedDevice.appVersion)) {
-      setConnectionError("휴대폰 앱을 v0.4.2로 업데이트한 뒤 다시 눌러 주세요. 기기 등록은 유지됩니다.");
+      setConnectionError("휴대폰 앱을 v0.4.3으로 업데이트한 뒤 다시 눌러 주세요. 기기 등록은 유지됩니다.");
       setToast("앱 업데이트가 필요해요.");
       setDialog("settings");
       return;
@@ -1192,10 +1192,10 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               {pairingBusy ? <span className="pair-code-loading"><span className="spinner blue" /> 코드 만드는 중</span> : pairing ? <><strong>{pairing.code.slice(0, 3)} {pairing.code.slice(3)}</strong><small>10분 동안 한 번만 사용할 수 있어요.</small></> : <span>코드를 만들지 못했습니다.</span>}
             </div>
             {pairingError && <p className="modal-error" role="alert">{pairingError}</p>}
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.2-release.apk" download>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.3-release.apk" download>
               <span aria-hidden="true">↓</span>
               <strong>Galaxy Remote APK 받기</strong>
-              <small>Galaxy arm64 v0.4.2 · 15MB · 1080p 60fps · 자동 연결·길게 누르기 지원</small>
+              <small>Galaxy arm64 v0.4.3 · 15MB · 해상도·프레임 개별 설정 · 자동 연결·길게 누르기 지원</small>
             </a>
             <p className="install-warning">v0.4.0·v0.4.1과 같은 서명키로 만든 업데이트입니다. 해당 버전은 삭제하지 말고 그대로 설치하세요. v0.3.1 이하는 서명키가 달라 기존 앱 삭제가 필요합니다.</p>
             <div className="modal-note"><span>1</span> 설치·업데이트 <b>→</b><span>2</span> 권한 설정 <b>→</b><span>3</span> 웹에서 연결</div>
@@ -1236,9 +1236,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 </div>
               )) : <div className="empty-device-list">등록된 기기가 없습니다.</div>}
             </div>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.2-release.apk" download>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.3-release.apk" download>
               <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote v0.4.2 받기</strong>
+              <strong>Galaxy Remote v0.4.3 받기</strong>
               <small>v0.4.0·v0.4.1 위에 바로 설치할 수 있습니다.</small>
             </a>
           </section>
