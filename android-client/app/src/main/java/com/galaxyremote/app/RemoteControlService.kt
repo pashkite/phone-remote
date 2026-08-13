@@ -284,7 +284,10 @@ class RemoteControlService : Service() {
     private fun handleControl(command: JSONObject): Boolean {
         when (command.optString("type")) {
             "quality" -> {
-                val description = webRtcSession?.setQuality(command.optString("preset")) ?: return false
+                val description = webRtcSession?.setQuality(
+                    command.optInt("shortEdge", 1080),
+                    command.optInt("fps", 30),
+                ) ?: return false
                 webRtcSession?.sendNotice("화질: $description")
                 return true
             }
