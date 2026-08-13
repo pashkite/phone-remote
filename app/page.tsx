@@ -30,6 +30,7 @@ export default async function Home() {
     <RemoteConsole
       displayName={user.displayName}
       email={user.email}
+      signOutPath={chatGPTSignOutPath("/")}
     />
   );
 }
