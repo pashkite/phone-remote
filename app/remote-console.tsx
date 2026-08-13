@@ -493,7 +493,7 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
       return;
     }
     if (!supportsNotificationApproval(selectedDevice.appVersion)) {
-      setConnectionError("휴대폰 앱을 v0.3.1로 업데이트한 뒤 다시 눌러 주세요. 기기 등록은 유지됩니다.");
+      setConnectionError("휴대폰 앱을 v0.4.2로 업데이트한 뒤 다시 눌러 주세요. 기기 등록은 유지됩니다.");
       setToast("앱 업데이트가 필요해요.");
       setDialog("settings");
       return;
@@ -1188,12 +1188,12 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
               {pairingBusy ? <span className="pair-code-loading"><span className="spinner blue" /> 코드 만드는 중</span> : pairing ? <><strong>{pairing.code.slice(0, 3)} {pairing.code.slice(3)}</strong><small>10분 동안 한 번만 사용할 수 있어요.</small></> : <span>코드를 만들지 못했습니다.</span>}
             </div>
             {pairingError && <p className="modal-error" role="alert">{pairingError}</p>}
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.3.1-release.apk" download>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.2-release.apk" download>
               <span aria-hidden="true">↓</span>
               <strong>Galaxy Remote APK 받기</strong>
-              <small>Galaxy arm64 v0.3.1 · 15MB · 1080p 60fps · 자동 연결 지원</small>
+              <small>Galaxy arm64 v0.4.2 · 15MB · 1080p 60fps · 자동 연결·길게 누르기 지원</small>
             </a>
-            <p className="install-warning">v0.3.0과 같은 서명키로 만든 업데이트입니다. 기존 앱을 삭제하지 말고 그대로 설치하세요. 페어링과 설정이 유지됩니다.</p>
+            <p className="install-warning">v0.4.0·v0.4.1과 같은 서명키로 만든 업데이트입니다. 해당 버전은 삭제하지 말고 그대로 설치하세요. v0.3.1 이하는 서명키가 달라 기존 앱 삭제가 필요합니다.</p>
             <div className="modal-note"><span>1</span> 설치·업데이트 <b>→</b><span>2</span> 권한 설정 <b>→</b><span>3</span> 웹에서 연결</div>
             <div className="pair-actions">
               <button type="button" onClick={createPairingCode} disabled={pairingBusy}>새 코드</button>
@@ -1232,10 +1232,10 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
                 </div>
               )) : <div className="empty-device-list">등록된 기기가 없습니다.</div>}
             </div>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.3.1-release.apk" download>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.2-release.apk" download>
               <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote v0.3.1 받기</strong>
-              <small>기존 v0.3.0 위에 바로 설치하세요. 페어링과 설정이 유지됩니다.</small>
+              <strong>Galaxy Remote v0.4.2 받기</strong>
+              <small>v0.4.0·v0.4.1 위에 바로 설치할 수 있습니다.</small>
             </a>
           </section>
         </div>
