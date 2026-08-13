@@ -1,0 +1,671 @@
+package com.galaxyremote.app
+
+import android.Manifest
+import android.app.Activity
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
+import android.media.projection.MediaProjectionConfig
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import android.view.View
+import android.view.inputmethod.InputMethodManager
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.Executors
+
+class MainActivity : AppCompatActivity() {
+    private lateinit var preferences: RemotePreferences
+    private lateinit var statusBadge: TextView
+    private lateinit var pairingDescription: TextView
+    private lateinit var pairingCode: EditText
+    private lateinit var pairButton: Button
+    private lateinit var accessibilityStatus: TextView
+    private lateinit var accessibilityButton: Button
+    private lateinit var keyboardStatus: TextView
+    private lateinit var keyboardButton: Button
+    private lateinit var standbyStatus: TextView
+    private lateinit var standbyButton: Button
+    private val executor = Executors.newSingleThreadExecutor()
+    private var receiverRegistered = false
+    private var startListenerAfterNotification = false
+    private var pendingSessionId: String? = null
+    private var preparingTrustedAccess = false
+    private var runtimeErrorDialogShowing = false
+
+    private val projectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val data = result.data
+        if (result.resultCode != Activity.RESULT_OK || data == null) {
+            setStatus("화면 공유 승인이 취소되었습니다.", false)
+            if (preparingTrustedAccess) {
+                preparingTrustedAccess = false
+                Toast.makeText(
+                    this,
+                    "자동 연결을 준비하려면 Android 화면 공유를 한 번 허용해 주세요.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            } else {
+                rejectPendingSession()
+                Toast.makeText(this, "PC 연결 요청을 승인하려면 화면 공유를 허용해 주세요.", Toast.LENGTH_LONG).show()
+            }
+            return@registerForActivityResult
+        }
+
+        val sessionId = pendingSessionId
+        pendingSessionId = null
+        val prepareOnly = preparingTrustedAccess
+        preparingTrustedAccess = false
+        if (sessionId.isNullOrBlank() && !prepareOnly) {
+            setStatus("PC 연결 요청이 만료되었습니다.", false)
+            return@registerForActivityResult
+        }
+
+        val serviceIntent = Intent(this, RemoteControlService::class.java).apply {
+            action = if (prepareOnly) RemoteControlService.ACTION_PREPARE else RemoteControlService.ACTION_START
+            putExtra(RemoteControlService.EXTRA_RESULT_CODE, result.resultCode)
+            putExtra(RemoteControlService.EXTRA_RESULT_DATA, data)
+            if (!sessionId.isNullOrBlank()) putExtra(RemoteControlService.EXTRA_SESSION_ID, sessionId)
+        }
+        ContextCompat.startForegroundService(this, serviceIntent)
+        preferences.standbyActive = true
+        renderState()
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        if (startListenerAfterNotification) {
+            startListenerAfterNotification = false
+            startRequestListener()
+        } else {
+            Toast.makeText(this, R.string.first_run_permissions_ready, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val statusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ConnectionListenerService.ACTION_STATUS) {
+                val message = intent.getStringExtra(ConnectionListenerService.EXTRA_STATUS_MESSAGE)
+                if (!message.isNullOrBlank()) standbyStatus.text = message
+                renderState()
+                return
+            }
+            val message = intent?.getStringExtra(RemoteControlService.EXTRA_STATUS_MESSAGE)
+            val active = intent?.getBooleanExtra(RemoteControlService.EXTRA_STATUS_ACTIVE, false) ?: false
+            preferences.standbyActive = active
+            if (!message.isNullOrBlank()) setStatus(message, active)
+            renderState()
+            if (!active) showPendingRuntimeError()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        preferences = RemotePreferences(this)
+        pendingSessionId = savedInstanceState?.getString(STATE_PENDING_SESSION_ID)
+        preparingTrustedAccess = savedInstanceState?.getBoolean(STATE_PREPARING_TRUSTED_ACCESS) == true
+        inspectPreviousProcessExit()
+
+        statusBadge = findViewById(R.id.statusBadge)
+        pairingDescription = findViewById(R.id.pairingDescription)
+        pairingCode = findViewById(R.id.pairingCode)
+        pairButton = findViewById(R.id.pairButton)
+        accessibilityStatus = findViewById(R.id.accessibilityStatus)
+        accessibilityButton = findViewById(R.id.accessibilityButton)
+        keyboardStatus = findViewById(R.id.keyboardStatus)
+        keyboardButton = findViewById(R.id.keyboardButton)
+        standbyStatus = findViewById(R.id.standbyStatus)
+        standbyButton = findViewById(R.id.standbyButton)
+
+        pairButton.setOnClickListener { pairDevice() }
+        accessibilityButton.setOnClickListener { openAccessibilitySettings() }
+        keyboardButton.setOnClickListener { configureRemoteKeyboard() }
+        standbyButton.setOnClickListener {
+            when {
+                preferences.standbyActive -> stopScreenShare()
+                preferences.listenerEnabled -> prepareTrustedAutoConnect()
+                else -> enableRequestListener()
+            }
+        }
+        renderState()
+
+        if (preferences.listenerEnabled && preferences.credentials != null && hasNotificationPermission()) {
+            startRequestListener()
+        }
+        window.decorView.post { handleApprovalIntent(intent) }
+
+        if (!preferences.permissionOnboardingShown) {
+            preferences.permissionOnboardingShown = true
+            window.decorView.post { showFirstRunPermissionSetup() }
+        } else if (
+            preferences.credentials != null &&
+            !preferences.trustedAutoConnectOnboardingShown
+        ) {
+            preferences.trustedAutoConnectOnboardingShown = true
+            window.decorView.post {
+                if (pendingSessionId == null && !RemoteControlService.isProjectionReady()) {
+                    prepareTrustedAutoConnect()
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleApprovalIntent(intent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_PENDING_SESSION_ID, pendingSessionId)
+        outState.putBoolean(STATE_PREPARING_TRUSTED_ACCESS, preparingTrustedAccess)
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!receiverRegistered) {
+            ContextCompat.registerReceiver(
+                this,
+                statusReceiver,
+                IntentFilter().apply {
+                    addAction(RemoteControlService.ACTION_STATUS)
+                    addAction(ConnectionListenerService.ACTION_STATUS)
+                },
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+            receiverRegistered = true
+        }
+        renderState()
+        window.decorView.post { showPendingRuntimeError() }
+        if (
+            preferences.permissionSetupInProgress &&
+            RemoteAccessibilityService.isEnabled(this)
+        ) {
+            preferences.permissionSetupInProgress = false
+            window.decorView.post { continueFirstRunPermissionSetup() }
+        }
+        if (preferences.listenerEnabled && preferences.credentials != null && hasNotificationPermission()) {
+            startRequestListener()
+        }
+    }
+
+    override fun onPause() {
+        if (receiverRegistered) {
+            unregisterReceiver(statusReceiver)
+            receiverRegistered = false
+        }
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        executor.shutdownNow()
+        super.onDestroy()
+    }
+
+    private fun pairDevice() {
+        val code = pairingCode.text.toString().filter(Char::isDigit)
+        if (code.length != 6) {
+            pairingCode.error = "PC 사이트에 표시된 6자리 코드를 입력해 주세요."
+            return
+        }
+
+        pairButton.isEnabled = false
+        pairButton.text = "등록하는 중…"
+        val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+        val deviceName = "$manufacturer ${Build.MODEL}".trim()
+        executor.execute {
+            try {
+                val result = ApiClient().pair(code, deviceName, BuildConfig.VERSION_NAME)
+                preferences.saveRegistration(
+                    result.deviceId,
+                    result.deviceToken,
+                    result.signalingBaseUrl,
+                    result.owner,
+                )
+                runOnUiThread {
+                    pairingCode.text.clear()
+                    Toast.makeText(this, "이 갤럭시가 계정에 등록됐어요.", Toast.LENGTH_LONG).show()
+                    renderState()
+                    enableRequestListener()
+                    prepareTrustedAutoConnect()
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    pairingCode.error = error.message ?: "기기를 등록하지 못했습니다."
+                }
+            } finally {
+                runOnUiThread {
+                    pairButton.isEnabled = true
+                    pairButton.text = if (preferences.credentials == null) "기기 등록" else "다시 등록"
+                }
+            }
+        }
+    }
+
+    private fun enableRequestListener() {
+        if (preferences.credentials == null) {
+            Toast.makeText(this, "먼저 PC 사이트의 6자리 코드로 기기를 등록해 주세요.", Toast.LENGTH_LONG).show()
+            pairingCode.requestFocus()
+            return
+        }
+        if (!hasNotificationPermission()) {
+            startListenerAfterNotification = true
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            startRequestListener()
+        }
+    }
+
+    private fun startRequestListener() {
+        if (preferences.credentials == null || !hasNotificationPermission()) return
+        preferences.listenerEnabled = true
+        ContextCompat.startForegroundService(
+            this,
+            Intent(this, ConnectionListenerService::class.java)
+                .setAction(ConnectionListenerService.ACTION_START),
+        )
+        renderState()
+    }
+
+    private fun stopRequestListener() {
+        startService(
+            Intent(this, ConnectionListenerService::class.java)
+                .setAction(ConnectionListenerService.ACTION_STOP),
+        )
+        preferences.listenerEnabled = false
+        standbyStatus.text = "연결 요청 알림을 껐습니다."
+        renderState()
+    }
+
+    private fun stopScreenShare() {
+        startService(Intent(this, RemoteControlService::class.java).setAction(RemoteControlService.ACTION_STOP))
+        preferences.standbyActive = false
+        setStatus("화면 공유를 중지했습니다. 새 PC 요청은 계속 받을 수 있어요.", false)
+        renderState()
+    }
+
+    private fun handleApprovalIntent(intent: Intent?) {
+        if (intent?.action != ACTION_APPROVE_SESSION) return
+        val sessionId = intent.getStringExtra(ConnectionListenerService.EXTRA_SESSION_ID)
+            ?.takeIf(String::isNotBlank)
+            ?: return
+        if (preferences.credentials == null) {
+            Toast.makeText(this, "기기 등록이 만료되었습니다. 다시 등록해 주세요.", Toast.LENGTH_LONG).show()
+            return
+        }
+        pendingSessionId = sessionId
+        preparingTrustedAccess = false
+        intent.action = null
+        executor.execute {
+            try {
+                preferences.credentials?.let { ApiClient(it).decideSession(sessionId, "opened") }
+            } catch (_: Exception) {
+                // The approval endpoint is retried by the projection service after consent.
+            }
+        }
+        launchProjectionConsent()
+    }
+
+    private fun prepareTrustedAutoConnect() {
+        if (RemoteControlService.isProjectionReady()) return
+        preferences.trustedAutoConnectOnboardingShown = true
+        pendingSessionId = null
+        preparingTrustedAccess = true
+        Toast.makeText(
+            this,
+            "이 화면 공유를 한 번 허용하면 이후 등록된 PC 요청은 자동으로 연결됩니다.",
+            Toast.LENGTH_LONG,
+        ).show()
+        launchProjectionConsent()
+    }
+
+    private fun rejectPendingSession() {
+        val sessionId = pendingSessionId ?: return
+        pendingSessionId = null
+        executor.execute {
+            try {
+                preferences.credentials?.let { ApiClient(it).decideSession(sessionId, "reject") }
+            } catch (_: Exception) {
+                // The request expires automatically after 60 seconds.
+            }
+        }
+    }
+
+    private fun configureRemoteKeyboard() {
+        if (!RemoteKeyboardService.isEnabled(this)) {
+            Toast.makeText(this, "목록에서 Galaxy Remote 키보드를 먼저 켜 주세요.", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+            return
+        }
+        getSystemService(InputMethodManager::class.java).showInputMethodPicker()
+    }
+
+    private fun hasNotificationPermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun showFirstRunPermissionSetup() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.first_run_permissions_title)
+            .setMessage(R.string.first_run_permissions_message)
+            .setNegativeButton(R.string.first_run_permissions_later, null)
+            .setPositiveButton(R.string.first_run_permissions_start) { _, _ ->
+                openAccessibilitySettings(continueFirstRunSetup = true)
+            }
+            .show()
+    }
+
+    private fun continueFirstRunPermissionSetup() {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            startListenerAfterNotification = false
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            Toast.makeText(this, R.string.first_run_permissions_ready, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openAccessibilitySettings(continueFirstRunSetup: Boolean = false) {
+        if (RemoteAccessibilityService.isEnabled(this)) {
+            if (continueFirstRunSetup) continueFirstRunPermissionSetup()
+            else startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            return
+        }
+
+        fun launchSettings() {
+            preferences.permissionSetupInProgress = continueFirstRunSetup
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+
+        if (preferences.accessibilityDisclosureAccepted) {
+            launchSettings()
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.accessibility_disclosure_title)
+            .setMessage(R.string.accessibility_disclosure_message)
+            .setNegativeButton(R.string.accessibility_disclosure_cancel) { _, _ ->
+                preferences.permissionSetupInProgress = false
+            }
+            .setPositiveButton(R.string.accessibility_disclosure_accept) { _, _ ->
+                preferences.accessibilityDisclosureAccepted = true
+                launchSettings()
+            }
+            .show()
+    }
+
+    private fun launchProjectionConsent() {
+        val manager = getSystemService(MediaProjectionManager::class.java)
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
+        } else {
+            manager.createScreenCaptureIntent()
+        }
+        projectionLauncher.launch(intent)
+    }
+
+    private fun showPendingRuntimeError() {
+        if (runtimeErrorDialogShowing || isFinishing || isDestroyed) return
+        val diagnostic = preferences.consumeRuntimeError() ?: return
+        runtimeErrorDialogShowing = true
+        AlertDialog.Builder(this)
+            .setTitle(R.string.runtime_error_title)
+            .setMessage(diagnostic)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                runtimeErrorDialogShowing = false
+            }
+            .setOnCancelListener { runtimeErrorDialogShowing = false }
+            .show()
+    }
+
+    private fun inspectPreviousProcessExit() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val exits = getSystemService(ActivityManager::class.java)
+            .getHistoricalProcessExitReasons(packageName, 0, 10)
+        val lastInspection = preferences.lastExitInspectionTimestamp
+        val newestTimestamp = exits.maxOfOrNull(ApplicationExitInfo::getTimestamp) ?: return
+        val freshCrash = exits
+            .asSequence()
+            .filter { it.timestamp > lastInspection }
+            .filter {
+                it.reason == ApplicationExitInfo.REASON_CRASH ||
+                    it.reason == ApplicationExitInfo.REASON_CRASH_NATIVE ||
+                    it.reason == ApplicationExitInfo.REASON_ANR
+            }
+            .maxByOrNull(ApplicationExitInfo::getTimestamp)
+        // Version 0.1.4 only showed Android's short "crash" description. After
+        // updating, inspect that same native tombstone once so the next report
+        // can include the failing library before another reproduction.
+        val detailedNativeCrash = exits
+            .asSequence()
+            .filter { it.reason == ApplicationExitInfo.REASON_CRASH_NATIVE }
+            .filter { it.timestamp > preferences.lastDetailedNativeCrashTimestamp }
+            .maxByOrNull(ApplicationExitInfo::getTimestamp)
+        val crash = detailedNativeCrash ?: freshCrash
+        preferences.lastExitInspectionTimestamp = newestTimestamp
+        if (crash == null || preferences.hasRuntimeError) return
+
+        val kind = when (crash.reason) {
+            ApplicationExitInfo.REASON_CRASH_NATIVE -> "네이티브 충돌"
+            ApplicationExitInfo.REASON_ANR -> "응답 없음"
+            else -> "앱 충돌"
+        }
+        val detail = crash.description
+            ?.replace(Regex("[\\r\\n\\t]+"), " ")
+            ?.trim()
+            ?.take(260)
+            ?.takeIf(String::isNotBlank)
+        val stage = preferences.nativeStage
+        val traceSummary = nativeTraceSummary(crash)
+        preferences.recordRuntimeError(
+            buildString {
+                append("이전 화면 공유 실행이 ")
+                append(kind)
+                append("로 종료되었습니다.\n\n진단 코드: AndroidExit-")
+                append(crash.reason)
+                if (detail != null) {
+                    append("\n세부 내용: ")
+                    append(detail)
+                }
+                stage?.let {
+                    append("\n마지막 WebRTC 단계: ")
+                    append(it)
+                }
+                crash.processName?.takeIf(String::isNotBlank)?.let {
+                    append("\n프로세스: ")
+                    append(it)
+                }
+                if (crash.status != 0) {
+                    append("\n종료 상태: ")
+                    append(crash.status)
+                }
+                traceSummary?.let {
+                    append("\n네이티브 단서:\n")
+                    append(it)
+                }
+                append("\n\n이 내용은 기기에만 저장되며 서버로 전송되지 않습니다.")
+            },
+        )
+        if (crash.reason == ApplicationExitInfo.REASON_CRASH_NATIVE) {
+            preferences.lastDetailedNativeCrashTimestamp = crash.timestamp
+        }
+        preferences.clearNativeStage()
+    }
+
+    private fun nativeTraceSummary(crash: ApplicationExitInfo): String? {
+        if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            crash.reason != ApplicationExitInfo.REASON_CRASH_NATIVE
+        ) return null
+
+        val bytes = try {
+            crash.traceInputStream?.use { input ->
+                val output = ByteArrayOutputStream()
+                val buffer = ByteArray(4_096)
+                var total = 0
+                while (total < MAX_NATIVE_TRACE_BYTES) {
+                    val count = input.read(
+                        buffer,
+                        0,
+                        minOf(buffer.size, MAX_NATIVE_TRACE_BYTES - total),
+                    )
+                    if (count <= 0) break
+                    output.write(buffer, 0, count)
+                    total += count
+                }
+                output.toByteArray()
+            }
+        } catch (_: Exception) {
+            null
+        } ?: return null
+
+        val printable = mutableListOf<String>()
+        val current = StringBuilder()
+        fun flush() {
+            if (current.length in 4..240) printable += current.toString().trim()
+            current.setLength(0)
+        }
+        bytes.forEach { byte ->
+            val value = byte.toInt() and 0xff
+            if (value in 32..126) current.append(value.toChar()) else flush()
+        }
+        flush()
+
+        val keywords = listOf(
+            "sigsegv",
+            "sigabrt",
+            "signal",
+            "abort message",
+            "libjingle",
+            "libvpx",
+            "webrtc",
+            "mediacodec",
+            "surface",
+            "egl",
+            ".so",
+        )
+        return printable
+            .asSequence()
+            .map { it.replace(Regex("\\s+"), " ").trim() }
+            .filter(String::isNotBlank)
+            .filter { line -> keywords.any { line.contains(it, ignoreCase = true) } }
+            .distinct()
+            .take(8)
+            .joinToString("\n")
+            .take(700)
+            .takeIf(String::isNotBlank)
+    }
+
+    private fun setStatus(message: String, active: Boolean) {
+        standbyStatus.text = message
+        statusBadge.text = if (active) "연결 중" else if (preferences.listenerEnabled) "요청 대기" else if (preferences.credentials != null) "등록됨" else "설정 필요"
+        statusBadge.setTextColor(
+            ContextCompat.getColor(this, if (active) R.color.online else R.color.primary_dark),
+        )
+    }
+
+    private fun renderState() {
+        val credentials = preferences.credentials
+        val accessibilityEnabled = RemoteAccessibilityService.isEnabled(this)
+        val active = preferences.standbyActive
+        val listening = preferences.listenerEnabled
+        val keyboardEnabled = RemoteKeyboardService.isEnabled(this)
+        val keyboardSelected = RemoteKeyboardService.isSelected(this)
+
+        pairingDescription.text = if (credentials == null) {
+            "PC 사이트에 로그인해 만든 6자리 코드를 입력하세요. 비밀번호는 앱에 저장되지 않습니다."
+        } else {
+            val ownerLabel = credentials.owner.ifBlank { "현재 ChatGPT 계정" }
+            "$ownerLabel 계정에 등록된 기기입니다. 필요한 경우 새 코드로 다시 등록할 수 있어요."
+        }
+        pairButton.text = if (credentials == null) "기기 등록" else "다시 등록"
+        pairingCode.visibility = if (active) View.GONE else View.VISIBLE
+        pairButton.visibility = if (active) View.GONE else View.VISIBLE
+
+        accessibilityStatus.text = if (accessibilityEnabled) {
+            "허용됨 · PC의 터치와 키 입력을 전달할 준비가 됐어요."
+        } else {
+            "접근성 설정에서 ‘Galaxy Remote 조작’을 허용해 주세요."
+        }
+        accessibilityStatus.setTextColor(
+            ContextCompat.getColor(this, if (accessibilityEnabled) R.color.online else R.color.muted),
+        )
+        accessibilityButton.text = if (accessibilityEnabled) "접근성 설정 확인" else "접근성 설정 열기"
+
+        keyboardStatus.text = when {
+            keyboardSelected -> "선택됨 · Discord 같은 앱에서도 실제 입력 칸으로 문자를 전달합니다."
+            keyboardEnabled -> "켜짐 · 키보드 선택 버튼을 눌러 Galaxy Remote를 선택해 주세요."
+            else -> "선택 사항 · 복잡한 채팅 앱에서 입력 지연과 문자 오염을 줄여 줍니다."
+        }
+        keyboardStatus.setTextColor(
+            ContextCompat.getColor(this, if (keyboardSelected) R.color.online else R.color.muted),
+        )
+        keyboardButton.text = when {
+            keyboardSelected -> "키보드 선택 변경"
+            keyboardEnabled -> "Galaxy Remote 키보드 선택"
+            else -> "원격 키보드 켜기"
+        }
+
+        standbyButton.isEnabled = credentials != null
+        standbyButton.text = when {
+            active -> "화면 공유 중지"
+            listening -> "자동 연결 준비"
+            else -> "연결 요청 알림 켜기"
+        }
+        when {
+            active -> {
+            statusBadge.text = "자동 연결 준비"
+            statusBadge.setTextColor(ContextCompat.getColor(this, R.color.online))
+            standbyStatus.text = "화면 공유 권한이 유지되고 있어 등록된 PC 요청은 휴대폰 승인 없이 자동 연결됩니다."
+            }
+            listening -> {
+                statusBadge.text = "요청 대기"
+                statusBadge.setTextColor(ContextCompat.getColor(this, R.color.online))
+                standbyStatus.text = "자동 연결 준비를 누르고 화면 공유를 한 번 허용하면 이후 PC 요청은 바로 연결됩니다."
+            }
+            else -> {
+            statusBadge.text = if (credentials == null) "설정 필요" else "등록됨"
+            statusBadge.setTextColor(ContextCompat.getColor(this, R.color.primary_dark))
+            standbyStatus.text = if (credentials == null) {
+                "기기를 등록하면 PC 연결 요청을 알림으로 받을 수 있습니다."
+            } else {
+                "연결 요청 알림을 켜면 휴대폰에서 미리 화면 공유를 시작할 필요가 없습니다."
+            }
+            }
+        }
+    }
+
+    companion object {
+        const val ACTION_APPROVE_SESSION = "com.galaxyremote.app.action.APPROVE_SESSION"
+        private const val STATE_PENDING_SESSION_ID = "pending_session_id"
+        private const val STATE_PREPARING_TRUSTED_ACCESS = "preparing_trusted_access"
+        private const val MAX_NATIVE_TRACE_BYTES = 256 * 1_024
+    }
+}
