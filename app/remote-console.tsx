@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { normalizedVideoPoint } from "./remote-geometry";
 
 type ConnectionState = "offline" | "waiting" | "reconnecting" | "connected";
 type PcMode = "personal" | "public";
 type DialogState = "pair" | "disconnect" | "settings" | null;
-type QualityPreset = "auto" | "data" | "smooth" | "clear";
+type ResolutionSetting = 540 | 1080 | 1440;
+type FrameRateSetting = 24 | 30 | 60;
 
 type RemoteConsoleProps = {
   displayName: string;
   email: string | null;
+  signOutPath: string;
 };
 
 type RegisteredDevice = {
@@ -42,7 +45,6 @@ type ConnectionMetrics = {
 };
 
 const MINIMUM_NOTIFICATION_APP_VERSION = [0, 2, 0] as const;
-const HIGH_PERFORMANCE_QUALITY_APP_VERSION = [0, 3, 0] as const;
 
 function versionAtLeast(version: string, minimumVersion: readonly number[]) {
   const parts = version.split(".").map((part) => Number.parseInt(part, 10));
@@ -76,7 +78,7 @@ async function responseError(response: Response, fallback: string) {
   }
 }
 
-export default function RemoteConsole({ displayName, email }: RemoteConsoleProps) {
+export default function RemoteConsole({ displayName, email, signOutPath }: RemoteConsoleProps) {
   const [connection, setConnection] = useState<ConnectionState>("offline");
   const [dialog, setDialog] = useState<DialogState>(null);
   const [devices, setDevices] = useState<RegisteredDevice[]>([]);
@@ -85,7 +87,8 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingError, setPairingError] = useState<string | null>(null);
   const [volume, setVolume] = useState(62);
-  const [qualityPreset, setQualityPreset] = useState<QualityPreset>("auto");
+  const [resolution, setResolution] = useState<ResolutionSetting>(1080);
+  const [frameRate, setFrameRate] = useState<FrameRateSetting>(30);
   const [pcMode, setPcMode] = useState<PcMode>("public");
   const [detachedOpacity, setDetachedOpacity] = useState(100);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -127,6 +130,8 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalCloseRef = useRef(false);
+  const resolutionRef = useRef<ResolutionSetting>(1080);
+  const frameRateRef = useRef<FrameRateSetting>(30);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -173,24 +178,6 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
   );
   const connected = connection === "connected";
   const waiting = connection === "waiting";
-  const highPerformanceQuality = selectedDevice
-    ? versionAtLeast(selectedDevice.appVersion, HIGH_PERFORMANCE_QUALITY_APP_VERSION)
-    : false;
-  const qualityOptions: Array<{ value: QualityPreset; label: string }> = highPerformanceQuality
-    ? [
-        { value: "auto", label: "자동 · 1080p · 30fps" },
-        { value: "smooth", label: "부드러움 · 1080p · 60fps" },
-        { value: "clear", label: "선명 · 1440p · 30fps" },
-        { value: "data", label: "절약 · 540p · 24fps" },
-      ]
-    : [
-        { value: "auto", label: "자동 · 720p · 20fps" },
-        { value: "clear", label: "선명 · 900p · 24fps" },
-        { value: "data", label: "절약 · 480p · 15fps" },
-      ];
-  const displayedQualityPreset = !highPerformanceQuality && qualityPreset === "smooth"
-    ? "auto"
-    : qualityPreset;
   const initials = useMemo(
     () =>
       displayName
@@ -272,6 +259,7 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
       peerRef.current.close();
     }
     peerRef.current = null;
+    remoteStreamRef.current?.getTracks().forEach((track) => track.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
     if (detachedVideoRef.current) detachedVideoRef.current.srcObject = null;
     remoteStreamRef.current = null;
@@ -289,7 +277,10 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
       path: null,
     });
     if (notifyServer && sessionId) {
-      void fetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
+      await fetch(`/api/sessions/${sessionId}`, { method: "DELETE", keepalive: true }).catch(() => {
+        // Local media and control resources are already closed even if the
+        // best-effort server cleanup cannot reach the network.
+      });
     }
   }, [stopTimers]);
 
@@ -596,7 +587,7 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
         setConnectionHint(null);
         reconnectAttemptsRef.current = 0;
         setToast("휴대폰과 안전하게 연결됐어요.");
-        sendPayload({ type: "quality", preset: displayedQualityPreset });
+        sendPayload({ type: "quality", shortEdge: resolutionRef.current, fps: frameRateRef.current });
         startStats(peer);
       };
       channel.onclose = () => {
@@ -729,11 +720,22 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
     if (connected) sendPayload({ type: "volume", value: normalized });
   }
 
-  function changeQuality(next: QualityPreset) {
-    setQualityPreset(next);
+  function changeResolution(next: ResolutionSetting) {
+    resolutionRef.current = next;
+    setResolution(next);
     if (connected) {
-      if (sendPayload({ type: "quality", preset: next })) {
-        setToast("휴대폰에서 화질을 적용하는 중이에요.");
+      if (sendPayload({ type: "quality", shortEdge: next, fps: frameRate })) {
+        setToast("휴대폰에서 해상도를 적용하는 중이에요.");
+      }
+    }
+  }
+
+  function changeFrameRate(next: FrameRateSetting) {
+    frameRateRef.current = next;
+    setFrameRate(next);
+    if (connected) {
+      if (sendPayload({ type: "quality", shortEdge: resolution, fps: next })) {
+        setToast("휴대폰에서 프레임을 적용하는 중이에요.");
       }
     }
   }
@@ -752,7 +754,7 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
     window.sessionStorage.clear();
     if (detachedWindow && !detachedWindow.closed) detachedWindow.close();
     setDetachedWindow(null);
-    setToast("이 브라우저의 원격 세션과 화면 설정을 지웠습니다. 공용 PC라면 사이트에서도 로그아웃해 주세요.");
+    window.location.assign(signOutPath);
   }
 
   function flushTextBuffer() {
@@ -832,20 +834,12 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
   function normalizedPointer(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
     const video = targetVideo ?? videoRef.current;
     const bounds = video?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
-    const videoAspect = video?.videoWidth && video.videoHeight
-      ? video.videoWidth / video.videoHeight
-      : bounds.width / bounds.height;
-    const frameAspect = bounds.width / bounds.height;
-    const renderedWidth = videoAspect > frameAspect ? bounds.width : bounds.height * videoAspect;
-    const renderedHeight = videoAspect > frameAspect ? bounds.width / videoAspect : bounds.height;
-    const offsetX = bounds.left + (bounds.width - renderedWidth) / 2;
-    const offsetY = bounds.top + (bounds.height - renderedHeight) / 2;
-    return {
-      x: Math.min(1, Math.max(0, (event.clientX - offsetX) / renderedWidth)),
-      y: Math.min(1, Math.max(0, (event.clientY - offsetY) / renderedHeight)),
-      inside: event.clientX >= offsetX && event.clientX <= offsetX + renderedWidth
-        && event.clientY >= offsetY && event.clientY <= offsetY + renderedHeight,
-    };
+    return normalizedVideoPoint(
+      event.clientX,
+      event.clientY,
+      bounds,
+      { width: video?.videoWidth ?? 0, height: video?.videoHeight ?? 0 },
+    );
   }
 
   function sendPointerGesture(start: { x: number; y: number; at: number }, end: { x: number; y: number }, endedAt: number) {
@@ -1004,13 +998,23 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
               </select>
               <select
                 className="quality-select"
-                aria-label="화면 화질"
-                value={displayedQualityPreset}
-                onChange={(event) => changeQuality(event.target.value as QualityPreset)}
+                aria-label="화면 해상도"
+                value={resolution}
+                onChange={(event) => changeResolution(Number(event.target.value) as ResolutionSetting)}
               >
-                {qualityOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
+                <option value={540}>540p</option>
+                <option value={1080}>1080p</option>
+                <option value={1440}>1440p</option>
+              </select>
+              <select
+                className="quality-select"
+                aria-label="화면 프레임"
+                value={frameRate}
+                onChange={(event) => changeFrameRate(Number(event.target.value) as FrameRateSetting)}
+              >
+                <option value={24}>24fps</option>
+                <option value={30}>30fps</option>
+                <option value={60}>60fps</option>
               </select>
               <button className="viewer-button" type="button" aria-pressed={Boolean(detachedWindow)} onClick={() => void toggleDetachedScreen()}>
                 {detachedWindow ? "화면 창 닫기" : "화면 분리"}
@@ -1055,7 +1059,7 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
               )}
             </div>
           </div>
-          <div className="screen-help"><span aria-hidden="true">ⓘ</span>클릭·드래그·마우스 휠·방향키를 휴대폰 터치로 전달합니다.</div>
+          <div className="screen-help"><span aria-hidden="true">ⓘ</span>클릭·드래그·마우스 휠·방향키를 휴대폰 터치로 전달합니다. 일부 보안·DRM 앱은 Android 정책상 화면이 검게 표시될 수 있습니다.</div>
         </article>
 
         {detachedWindow && createPortal(
@@ -1216,7 +1220,7 @@ export default function RemoteConsole({ displayName, email }: RemoteConsoleProps
           <section className="modal compact" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
             <button className="modal-close" type="button" aria-label="닫기" onClick={() => setDialog(null)}>×</button>
             <p className="eyebrow">DEVICE SECURITY</p><h2 id="settings-title">등록 기기 관리</h2>
-            <p>이 PC의 사용 환경을 선택하세요. 공용 PC 모드는 투명도 등 화면 설정을 저장하지 않습니다.</p>
+            <p>이 PC의 사용 환경을 선택하세요. 공용 PC 모드에서는 로그인 및 기기 정보와 투명도 등의 화면 설정을 이 브라우저에 남기지 않습니다.</p>
             <div className="pc-mode-picker" role="group" aria-label="PC 사용 모드">
               <button type="button" className={pcMode === "personal" ? "active" : ""} onClick={() => changePcMode("personal")}><strong>개인 PC</strong><small>화면 설정 기억</small></button>
               <button type="button" className={pcMode === "public" ? "active" : ""} onClick={() => changePcMode("public")}><strong>공용 PC</strong><small>설정 저장 안 함</small></button>
