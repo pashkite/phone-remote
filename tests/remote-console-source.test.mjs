@@ -18,6 +18,22 @@ test("detached opacity is visual-only and bounded", () => {
   assert.match(source, /\[25, 50, 75, 100\]/);
 });
 
+test("detached controls default to a compact toggle and persist the always-visible preference", () => {
+  assert.match(source, /className="detached-settings-button"/);
+  assert.match(source, /detachedControlsAlwaysVisible \|\| detachedControlsOpen/);
+  assert.match(source, /setDetachedControlsOpen\(\(current\) => !current\)/);
+  assert.match(source, /if \(!detachedControlsAlwaysVisible\) setDetachedControlsOpen\(false\)/);
+  assert.match(source, /galaxy-remote-detached-controls-always-visible/);
+  assert.match(source, /분리창 컨트롤 항상 표시/);
+});
+
+test("detached quality controls keep resolution and frame rate separate", () => {
+  assert.match(source, /aria-label="분리 창 화면 해상도"/);
+  assert.match(source, /aria-label="분리 창 화면 프레임"/);
+  assert.match(source, /changeResolution\(Number\(event\.target\.value\)/);
+  assert.match(source, /changeFrameRate\(Number\(event\.target\.value\)/);
+});
+
 test("public mode does not retain local preferences", () => {
   assert.match(source, /localStorage\.removeItem\("galaxy-remote-detached-opacity"\)/);
   assert.match(source, /window\.sessionStorage\.clear\(\)/);
