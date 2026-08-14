@@ -91,6 +91,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const [frameRate, setFrameRate] = useState<FrameRateSetting>(30);
   const [pcMode, setPcMode] = useState<PcMode>("public");
   const [detachedOpacity, setDetachedOpacity] = useState(100);
+  const [detachedControlsOpen, setDetachedControlsOpen] = useState(false);
+  const [detachedControlsAlwaysVisible, setDetachedControlsAlwaysVisible] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [detachedWindow, setDetachedWindow] = useState<Window | null>(null);
   const [metrics, setMetrics] = useState<ConnectionMetrics>({
@@ -143,6 +145,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         if (Number.isFinite(storedOpacity) && storedOpacity >= 20 && storedOpacity <= 100) {
           setDetachedOpacity(Math.round(storedOpacity));
         }
+        setDetachedControlsAlwaysVisible(
+          window.localStorage.getItem("galaxy-remote-detached-controls-always-visible") === "true",
+        );
       }
       setPreferencesLoaded(true);
     }, 0);
@@ -154,11 +159,16 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     if (pcMode === "personal") {
       window.localStorage.setItem("galaxy-remote-pc-mode", "personal");
       window.localStorage.setItem("galaxy-remote-detached-opacity", String(detachedOpacity));
+      window.localStorage.setItem(
+        "galaxy-remote-detached-controls-always-visible",
+        String(detachedControlsAlwaysVisible),
+      );
     } else {
       window.localStorage.removeItem("galaxy-remote-pc-mode");
       window.localStorage.removeItem("galaxy-remote-detached-opacity");
+      window.localStorage.removeItem("galaxy-remote-detached-controls-always-visible");
     }
-  }, [detachedOpacity, pcMode, preferencesLoaded]);
+  }, [detachedControlsAlwaysVisible, detachedOpacity, pcMode, preferencesLoaded]);
 
   const attachDetachedVideo = useCallback((node: HTMLVideoElement | null) => {
     detachedVideoRef.current = node;
@@ -742,7 +752,11 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
   function changePcMode(next: PcMode) {
     setPcMode(next);
-    if (next === "public") setDetachedOpacity(100);
+    if (next === "public") {
+      setDetachedOpacity(100);
+      setDetachedControlsAlwaysVisible(false);
+      setDetachedControlsOpen(false);
+    }
     setToast(next === "public" ? "공용 PC 모드로 전환했습니다." : "개인 PC 설정을 기억합니다.");
   }
 
@@ -751,6 +765,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     setDetachedOpacity(100);
     window.localStorage.removeItem("galaxy-remote-pc-mode");
     window.localStorage.removeItem("galaxy-remote-detached-opacity");
+    window.localStorage.removeItem("galaxy-remote-detached-controls-always-visible");
     window.sessionStorage.clear();
     if (detachedWindow && !detachedWindow.closed) detachedWindow.close();
     setDetachedWindow(null);
@@ -790,6 +805,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     if (detachedWindow && !detachedWindow.closed) {
       detachedWindow.close();
       setDetachedWindow(null);
+      setDetachedControlsOpen(false);
       return;
     }
     const ratio = (videoRef.current?.videoWidth && videoRef.current.videoHeight)
@@ -816,14 +832,24 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         .detached-phone-view { position: relative; width: 100vw; height: 100vh; overflow: hidden; cursor: crosshair; touch-action: none; background: #070b12; user-select: none; }
         .detached-phone-view video { display: block; width: 100%; height: 100%; object-fit: contain; background: #070b12; }
         .detached-message { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; color: #dbe8fb; background: linear-gradient(145deg, #121c2c, #070b12); font: 750 13px Pretendard, "Noto Sans KR", sans-serif; text-align: center; }
-        .detached-toolbar { position: fixed; z-index: 10; top: 10px; right: 10px; width: min(310px, calc(100vw - 20px)); padding: 10px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; color: #eef5ff; background: rgba(12,20,33,.88); box-shadow: 0 8px 28px rgba(0,0,0,.3); font: 700 12px Pretendard, "Noto Sans KR", sans-serif; backdrop-filter: blur(12px); cursor: default; }
-        .detached-toolbar-row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; }
-        .detached-toolbar input { min-width: 80px; accent-color: #5b9cff; }
-        .detached-toolbar button { min-width: 42px; height: 28px; border: 1px solid rgba(255,255,255,.22); border-radius: 7px; color: inherit; background: rgba(255,255,255,.1); cursor: pointer; font: inherit; }
-        .detached-presets { display: flex; gap: 5px; margin-top: 8px; justify-content: flex-end; }
+        .detached-settings-button { position: fixed; z-index: 11; top: 10px; right: 10px; width: 34px; height: 34px; padding: 0; border: 1px solid rgba(255,255,255,.24); border-radius: 10px; display: grid; place-items: center; color: #eef5ff; background: rgba(12,20,33,.72); box-shadow: 0 5px 18px rgba(0,0,0,.26); cursor: pointer; font: 800 20px/1 Pretendard, "Noto Sans KR", sans-serif; backdrop-filter: blur(10px); }
+        .detached-settings-button:hover, .detached-settings-button[aria-expanded="true"] { border-color: rgba(120,174,255,.72); background: rgba(37,82,143,.84); }
+        .detached-toolbar { position: fixed; z-index: 10; top: 52px; right: 10px; width: min(300px, calc(100vw - 20px)); max-height: calc(100vh - 62px); overflow: auto; padding: 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; color: #eef5ff; background: rgba(12,20,33,.9); box-shadow: 0 8px 28px rgba(0,0,0,.3); font: 700 11px Pretendard, "Noto Sans KR", sans-serif; backdrop-filter: blur(12px); cursor: default; }
+        .detached-toolbar-row { display: grid; grid-template-columns: auto minmax(72px,1fr) auto; align-items: center; gap: 8px; }
+        .detached-toolbar input { min-width: 72px; accent-color: #5b9cff; }
+        .detached-toolbar button, .detached-toolbar select { min-width: 52px; height: 30px; border: 1px solid rgba(255,255,255,.22); border-radius: 7px; color: inherit; background: rgba(255,255,255,.1); cursor: pointer; font: inherit; }
+        .detached-toolbar select { width: 100%; }
+        .detached-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
+        .detached-quality-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .detached-quality-grid label { display: grid; gap: 5px; color: rgba(238,245,255,.78); }
+        .detached-ratio-note { margin: 10px 0 0; color: rgba(238,245,255,.68); font-size: 10px; }
+        .detached-always-visible { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.14); display: flex; align-items: center; gap: 8px; }
+        .detached-always-visible input { min-width: 0; margin: 0; }
         .detached-keyboard-capture { position: absolute; width: 1px; height: 1px; opacity: .01; pointer-events: none; }
+        @media (max-width: 360px), (max-height: 480px) { .detached-toolbar { width: min(260px, calc(100vw - 16px)); top: 48px; right: 8px; padding: 9px; } .detached-settings-button { top: 8px; right: 8px; width: 32px; height: 32px; } }
       `;
       nextWindow.document.head.appendChild(style);
+      setDetachedControlsOpen(false);
       setDetachedWindow(nextWindow);
       nextWindow.focus();
     } catch {
@@ -1070,6 +1096,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               role="application"
               aria-label="분리된 휴대폰 원격 화면"
               onPointerDown={(event) => {
+                if (!detachedControlsAlwaysVisible) setDetachedControlsOpen(false);
                 if (!connected) return;
                 event.currentTarget.setPointerCapture(event.pointerId);
                 const point = normalizedPointer(event, detachedVideoRef.current);
@@ -1124,17 +1151,60 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 onInput={onKeyboardInput}
                 onKeyDown={onKeyboardKeyDown}
               />
-              <section className="detached-toolbar" aria-label="분리 창 화면 설정" onPointerDown={(event) => event.stopPropagation()} onPointerUp={(event) => event.stopPropagation()}>
-                <div className="detached-toolbar-row">
-                  <label htmlFor="detached-opacity">투명도</label>
-                  <input id="detached-opacity" type="range" min="20" max="100" step="1" value={detachedOpacity} onChange={(event) => setDetachedOpacity(Number(event.target.value))} />
-                  <output>{detachedOpacity}%</output>
-                  <button type="button" onClick={() => setDetachedOpacity(100)}>100%</button>
-                </div>
-                <div className="detached-presets" aria-label="투명도 빠른 선택">
-                  {[25, 50, 75, 100].map((value) => <button key={value} type="button" onClick={() => setDetachedOpacity(value)}>{value}%</button>)}
-                </div>
-              </section>
+              <button
+                className="detached-settings-button"
+                type="button"
+                aria-label="분리 창 설정"
+                aria-expanded={detachedControlsAlwaysVisible || detachedControlsOpen}
+                onPointerDown={(event) => event.stopPropagation()}
+                onPointerUp={(event) => event.stopPropagation()}
+                onClick={() => setDetachedControlsOpen((current) => !current)}
+              >
+                ⋯
+              </button>
+              {(detachedControlsAlwaysVisible || detachedControlsOpen) && (
+                <section className="detached-toolbar" aria-label="분리 창 화면 설정" onPointerDown={(event) => event.stopPropagation()} onPointerUp={(event) => event.stopPropagation()}>
+                  <div className="detached-toolbar-row">
+                    <label htmlFor="detached-opacity">투명도</label>
+                    <input id="detached-opacity" type="range" min="20" max="100" step="1" value={detachedOpacity} onChange={(event) => setDetachedOpacity(Number(event.target.value))} />
+                    <output>{detachedOpacity}%</output>
+                  </div>
+                  <div className="detached-presets" aria-label="투명도 빠른 선택">
+                    {[25, 50, 75, 100].map((value) => <button key={value} type="button" onClick={() => setDetachedOpacity(value)}>{value}%</button>)}
+                  </div>
+                  <div className="detached-quality-grid">
+                    <label>
+                      해상도
+                      <select aria-label="분리 창 화면 해상도" value={resolution} onChange={(event) => changeResolution(Number(event.target.value) as ResolutionSetting)}>
+                        <option value={540}>540p</option>
+                        <option value={1080}>1080p</option>
+                        <option value={1440}>1440p</option>
+                      </select>
+                    </label>
+                    <label>
+                      프레임
+                      <select aria-label="분리 창 화면 프레임" value={frameRate} onChange={(event) => changeFrameRate(Number(event.target.value) as FrameRateSetting)}>
+                        <option value={24}>24fps</option>
+                        <option value={30}>30fps</option>
+                        <option value={60}>60fps</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p className="detached-ratio-note">화면 비율은 기기 회전에 맞춰 자동 유지됩니다.</p>
+                  <label className="detached-always-visible">
+                    <input
+                      type="checkbox"
+                      checked={detachedControlsAlwaysVisible}
+                      onChange={(event) => {
+                        const next = event.target.checked;
+                        setDetachedControlsAlwaysVisible(next);
+                        setDetachedControlsOpen(next);
+                      }}
+                    />
+                    분리창 컨트롤 항상 표시
+                  </label>
+                </section>
+              )}
               {!connected && <div className="detached-message">휴대폰 연결을 기다리는 중이에요.</div>}
             </div>
           </main>,
