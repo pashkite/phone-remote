@@ -25,6 +25,24 @@ class RemoteKeyboardService : InputMethodService() {
     }
 
     override fun onCreateInputView(): View {
+        return android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            addView(TextView(this@RemoteKeyboardService).apply { text = "Galaxy Remote 키보드 · PC 입력 대기"; setPadding(24, 16, 24, 16) })
+            addView(android.widget.Button(this@RemoteKeyboardService).apply {
+                text = "클립보드 텍스트를 PC로 보내기"
+                setOnClickListener {
+                    try {
+                        val clip = getSystemService(android.content.ClipboardManager::class.java).primaryClip
+                        val value = clip?.getItemAt(0)?.coerceToText(this@RemoteKeyboardService)?.toString()
+                        val success = value != null && RemoteControlService.activeInstance?.sendLocalClipboard(value) == true
+                        android.widget.Toast.makeText(this@RemoteKeyboardService, if (success) "PC로 보냈습니다." else "클립보드가 없거나 PC 연결이 없습니다. 최대 64KiB입니다.", android.widget.Toast.LENGTH_LONG).show()
+                    } catch (_: Exception) { }
+                }
+            })
+        }
+    }
+
+    private fun originalInputView(): View {
         return TextView(this).apply {
             text = "Galaxy Remote 키보드 사용 중\nPC에서 입력하면 현재 칸에 바로 전달됩니다."
             gravity = Gravity.CENTER
@@ -75,6 +93,12 @@ class RemoteKeyboardService : InputMethodService() {
         private var instance: RemoteKeyboardService? = null
 
         fun dispatch(command: JSONObject): Boolean = instance?.handle(command) ?: false
+        fun pasteClipboard(): Boolean {
+            val service = instance ?: return false
+            val text = service.getSystemService(android.content.ClipboardManager::class.java).primaryClip?.getItemAt(0)?.coerceToText(service) ?: return false
+            if (text.toString().toByteArray(Charsets.UTF_8).size > 65536) return false
+            return service.currentInputConnection?.commitText(text, 1) ?: false
+        }
 
         fun isEnabled(context: Context): Boolean {
             val manager = context.getSystemService(InputMethodManager::class.java)

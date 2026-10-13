@@ -13,23 +13,21 @@ const webRtcSession = await readFile(
 );
 
 test("detached opacity is visual-only and bounded", () => {
-  assert.match(source, /type="range" min="20" max="100" step="1"/);
+  assert.match(source, /aria-label="분리 창 투명도"/);
   assert.match(source, /style=\{\{ opacity: detachedOpacity \/ 100 \}\}/);
-  assert.match(source, /\[25, 50, 75, 100\]/);
+  assert.match(source, /<option value=\{25\}>투명도 25%<\/option>/);
+  assert.match(source, /<option value=\{100\}>투명도 100%<\/option>/);
+});
+test("detached controls are available only on the main site", () => {
+  assert.doesNotMatch(source, /className="detached-settings-button"/);
+  assert.doesNotMatch(source, /className="detached-toolbar"/);
+  assert.match(source, /className="screen-heading-actions"/);
+  assert.match(source, /aria-label="분리 창 투명도"/);
 });
 
-test("detached controls default to a compact toggle and persist the always-visible preference", () => {
-  assert.match(source, /className="detached-settings-button"/);
-  assert.match(source, /detachedControlsAlwaysVisible \|\| detachedControlsOpen/);
-  assert.match(source, /setDetachedControlsOpen\(\(current\) => !current\)/);
-  assert.match(source, /if \(!detachedControlsAlwaysVisible\) setDetachedControlsOpen\(false\)/);
-  assert.match(source, /galaxy-remote-detached-controls-always-visible/);
-  assert.match(source, /분리창 컨트롤 항상 표시/);
-});
-
-test("detached quality controls keep resolution and frame rate separate", () => {
-  assert.match(source, /aria-label="분리 창 화면 해상도"/);
-  assert.match(source, /aria-label="분리 창 화면 프레임"/);
+test("main site quality controls keep resolution and frame rate separate", () => {
+  assert.match(source, /aria-label="화면 해상도"/);
+  assert.match(source, /aria-label="화면 프레임"/);
   assert.match(source, /changeResolution\(Number\(event\.target\.value\)/);
   assert.match(source, /changeFrameRate\(Number\(event\.target\.value\)/);
 });
@@ -44,6 +42,12 @@ test("letterbox clicks are rejected and long press reaches Android", () => {
   assert.match(source, /if \(!point\.inside\) return/);
   assert.match(source, /type: "longPress"/);
   assert.match(accessibility, /"longPress" -> longPress/);
+});
+
+test("accessibility text fallback never treats a placeholder as entered text", () => {
+  assert.match(accessibility, /val current = editableText\(focused\)/);
+  assert.match(accessibility, /if \(focused\.isShowingHintText\) return ""/);
+  assert.match(accessibility, /current == hint/);
 });
 
 test("connection failures schedule bounded retries", () => {

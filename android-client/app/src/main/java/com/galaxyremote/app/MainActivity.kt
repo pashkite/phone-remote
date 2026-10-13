@@ -29,6 +29,7 @@ import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
     private lateinit var preferences: RemotePreferences
+    private var editingRegistration = false
     private lateinit var statusBadge: TextView
     private lateinit var pairingDescription: TextView
     private lateinit var pairingCode: EditText
@@ -45,6 +46,28 @@ class MainActivity : AppCompatActivity() {
     private var pendingSessionId: String? = null
     private var preparingTrustedAccess = false
     private var runtimeErrorDialogShowing = false
+    private var incomingManager: RemoteFileTransfer? = null
+    private var incomingId: String? = null
+    private val sendFilePicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) RemoteFileTransfer.current?.queueFiles(uris)
+    }
+    private val receiveFilePicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val manager = incomingManager
+        val id = incomingId
+        incomingManager = null; incomingId = null
+        if (uri != null && manager != null && manager === RemoteFileTransfer.current && id != null && manager.pendingOffer?.id == id) manager.accept(uri, id)
+        else {
+            if (uri != null) try { android.provider.DocumentsContract.deleteDocument(contentResolver, uri) } catch (_: Exception) { }
+            manager?.cancel()
+        }
+    }
+    private val diagnosticsPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) try { contentResolver.openOutputStream(uri)?.use { it.write(RemoteDiagnostics.export(this).toByteArray(Charsets.UTF_8)) } }
+        catch (_: Exception) { Toast.makeText(this, "진단 저장 실패", Toast.LENGTH_LONG).show() }
+    }
+    private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        Toast.makeText(this, if (granted) "PC에서 소리 켜기를 눌러 주세요. 마이크 소리는 보내지 않습니다." else "소리 권한이 거부됐습니다. 화면 조작은 계속 가능합니다.", Toast.LENGTH_LONG).show()
+    }
 
     private val projectionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -114,6 +137,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun openRemoteTools() {
+        val labels = arrayOf("클립보드 텍스트를 PC로 보내기", "파일을 PC로 보내기", "PC 파일 수신 승인·저장 위치 선택", "재생 소리 캡처 권한 설정", "대기 모드 선택", "진단 보기", "진단 JSON 내보내기", "파일 전송 취소")
+        AlertDialog.Builder(this).setTitle("전송·대기·진단").setItems(labels) { _, which ->
+            when (which) {
+                0 -> {
+                    try {
+                        val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                        val text = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()
+                        val sent = text != null && RemoteControlService.activeInstance?.sendLocalClipboard(text) == true
+                        Toast.makeText(this, if (sent) "PC로 텍스트를 보냈습니다." else "클립보드가 없거나 PC 연결이 없습니다. 최대 64KiB입니다.", Toast.LENGTH_LONG).show()
+                    } catch (_: Exception) { Toast.makeText(this, "클립보드 접근이 제한됐습니다.", Toast.LENGTH_LONG).show() }
+                }
+                1 -> if (RemoteFileTransfer.current != null) sendFilePicker.launch(arrayOf("*/*")) else Toast.makeText(this, "PC와 먼저 연결해 주세요.", Toast.LENGTH_LONG).show()
+                2 -> {
+                    val manager = RemoteFileTransfer.current
+                    val offer = manager?.pendingOffer
+                    if (offer == null) Toast.makeText(this, "수신 대기 파일이 없습니다.", Toast.LENGTH_LONG).show()
+                    else AlertDialog.Builder(this).setTitle("파일 수신 승인").setMessage("${offer.name} · ${offer.size} bytes\n수신할 파일과 저장 위치를 확인하세요.")
+                        .setPositiveButton("저장 위치 선택") { _, _ -> incomingManager = manager; incomingId = offer.id; receiveFilePicker.launch(offer.name) }
+                        .setNegativeButton("거절") { _, _ -> manager?.cancel() }.show()
+                }
+                3 -> audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                4 -> AlertDialog.Builder(this).setTitle("대기 모드").setItems(arrayOf("빠른 연결 (약 2초)", "균형 (약 4초)", "절약 (약 12초)")) { _, index ->
+                    preferences.standbyMode = arrayOf("fast", "balanced", "saving")[index]
+                    Toast.makeText(this, "대기 모드가 변경됐습니다. 자동 연결 중에는 화면 공유 승인 세션을 유지합니다.", Toast.LENGTH_LONG).show()
+                }.show()
+                5 -> AlertDialog.Builder(this).setTitle("로컬 진단").setMessage(RemoteDiagnostics.export(this)).setPositiveButton("닫기", null).show()
+                6 -> diagnosticsPicker.launch("GalaxyRemote-diagnostics-${System.currentTimeMillis()}.json")
+                7 -> RemoteFileTransfer.current?.cancel()
+            }
+        }.show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -125,6 +181,10 @@ class MainActivity : AppCompatActivity() {
         statusBadge = findViewById(R.id.statusBadge)
         pairingDescription = findViewById(R.id.pairingDescription)
         pairingCode = findViewById(R.id.pairingCode)
+        findViewById<Button>(R.id.editRegistrationButton).setOnClickListener {
+            editingRegistration = !editingRegistration
+            renderState()
+        }
         pairButton = findViewById(R.id.pairButton)
         accessibilityStatus = findViewById(R.id.accessibilityStatus)
         accessibilityButton = findViewById(R.id.accessibilityButton)
@@ -133,6 +193,7 @@ class MainActivity : AppCompatActivity() {
         standbyStatus = findViewById(R.id.standbyStatus)
         standbyButton = findViewById(R.id.standbyButton)
 
+        findViewById<Button>(R.id.remoteToolsButton).setOnClickListener { openRemoteTools() }
         pairButton.setOnClickListener { pairDevice() }
         accessibilityButton.setOnClickListener { openAccessibilitySettings() }
         keyboardButton.setOnClickListener { configureRemoteKeyboard() }
@@ -241,6 +302,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 runOnUiThread {
                     pairingCode.text.clear()
+                    editingRegistration = false
                     Toast.makeText(this, "이 갤럭시가 계정에 등록됐어요.", Toast.LENGTH_LONG).show()
                     renderState()
                     enableRequestListener()
@@ -606,8 +668,13 @@ class MainActivity : AppCompatActivity() {
             "$ownerLabel 계정에 등록된 기기입니다. 필요한 경우 새 코드로 다시 등록할 수 있어요."
         }
         pairButton.text = if (credentials == null) "기기 등록" else "다시 등록"
-        pairingCode.visibility = if (active) View.GONE else View.VISIBLE
-        pairButton.visibility = if (active) View.GONE else View.VISIBLE
+        val showRegistration = credentials == null || editingRegistration
+        pairingCode.visibility = if (!active && showRegistration) View.VISIBLE else View.GONE
+        pairButton.visibility = if (!active && showRegistration) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.editRegistrationButton).apply {
+            visibility = if (credentials != null && !active) View.VISIBLE else View.GONE
+            text = if (editingRegistration) "등록 변경 취소" else "기기 등록 변경"
+        }
 
         accessibilityStatus.text = if (accessibilityEnabled) {
             "허용됨 · PC의 터치와 키 입력을 전달할 준비가 됐어요."
@@ -643,18 +710,18 @@ class MainActivity : AppCompatActivity() {
             active -> {
             statusBadge.text = "자동 연결 준비"
             statusBadge.setTextColor(ContextCompat.getColor(this, R.color.online))
-            standbyStatus.text = "화면 공유 권한이 유지되고 있어 등록된 PC 요청은 휴대폰 승인 없이 자동 연결됩니다."
+            standbyStatus.text = "자동 연결 준비됨 · PC에서 연결을 시작하세요. 아래 버튼을 누르면 화면 공유와 자동 연결이 중지됩니다."
             }
             listening -> {
                 statusBadge.text = "요청 대기"
                 statusBadge.setTextColor(ContextCompat.getColor(this, R.color.online))
-                standbyStatus.text = "자동 연결 준비를 누르고 화면 공유를 한 번 허용하면 이후 PC 요청은 바로 연결됩니다."
+                standbyStatus.text = "현재는 요청마다 휴대폰에서 승인합니다. 아래 버튼으로 화면 공유를 허용하면, 공유를 중지할 때까지 자동으로 연결됩니다."
             }
             else -> {
             statusBadge.text = if (credentials == null) "설정 필요" else "등록됨"
             statusBadge.setTextColor(ContextCompat.getColor(this, R.color.primary_dark))
             standbyStatus.text = if (credentials == null) {
-                "기기를 등록하면 PC 연결 요청을 알림으로 받을 수 있습니다."
+                "아래에서 기기를 등록하고 조작 권한을 허용한 뒤 연결 요청 알림을 켜세요."
             } else {
                 "연결 요청 알림을 켜면 휴대폰에서 미리 화면 공유를 시작할 필요가 없습니다."
             }

@@ -40,6 +40,8 @@ class ApiClient(private val credentials: DeviceCredentials? = null) {
         return authorizedPost("/api/device/heartbeat", payload)
     }
 
+    fun checkLease(sessionId: String): JSONObject = authorizedPost("/api/device/lease", JSONObject().put("sessionId", sessionId))
+
     fun poll(): JSONObject = authorizedPost("/api/device/poll", JSONObject())
 
     fun decideSession(sessionId: String, decision: String): JSONObject {

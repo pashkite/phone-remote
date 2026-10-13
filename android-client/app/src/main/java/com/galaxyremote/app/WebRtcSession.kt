@@ -49,6 +49,7 @@ class WebRtcSession(
     ) -> Unit,
     private val onConnectionState: (connected: Boolean, message: String) -> Unit,
     private val onProjectionStopped: () -> Unit,
+    private val onControlResult: ((JSONObject, (Boolean, String?) -> Unit) -> Unit)? = null,
 ) {
     private val preferences = RemotePreferences(context)
     private val eglBase: EglBase
@@ -59,6 +60,14 @@ class WebRtcSession(
     private lateinit var videoTrack: VideoTrack
     private var peerConnection: PeerConnection? = null
     private var controlChannel: DataChannel? = null
+    private var fileChannel: DataChannel? = null
+    private var audioChannel: DataChannel? = null
+    private var files: RemoteFileTransfer? = null
+    private var commands: RemoteCommandProcessor? = null
+    private val audio = PlaybackAudioCapture(
+        send = { bytes -> audioChannel?.let { it.state() == DataChannel.State.OPEN && it.bufferedAmount() < 32768 && it.send(DataChannel.Buffer(ByteBuffer.wrap(bytes), true)) } ?: false },
+        failed = { code -> sendJson(JSONObject().put("type", "audioState").put("state", "failed").put("code", code)) },
+    )
     private var videoSender: RtpSender? = null
     private var pendingSessionId: String? = null
     private val answerDelivered = AtomicBoolean(false)
@@ -105,12 +114,12 @@ class WebRtcSession(
         // an output adapter, a 120 Hz Galaxy can feed up to 120 frames/second
         // into WebRTC and overload the native codec path.
         val (initialWidth, initialHeight) = captureSize(BALANCED_QUALITY.shortEdge)
-        videoSource.adaptOutputFormat(initialWidth, initialHeight, BALANCED_QUALITY.fps)
+        videoSource.adaptOutputFormat(initialWidth, initialHeight, 1)
         preferences.markNativeStage("screen-capture-start")
         capturer.startCapture(captureWidth, captureHeight, HIGH_QUALITY.fps)
         preferences.markNativeStage("video-track-create")
         videoTrack = factory.createVideoTrack("galaxy-screen", videoSource)
-        videoTrack.setEnabled(true)
+        videoTrack.setEnabled(false)
         preferences.markNativeStage("waiting-for-pc-offer")
     }
 
@@ -131,9 +140,12 @@ class WebRtcSession(
             rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
         }
         preferences.markNativeStage("answer-peer-create")
-        val peer = factory.createPeerConnection(configuration, PeerObserver())
+        val peer = factory.createPeerConnection(configuration, PeerObserver(sessionId))
             ?: throw IllegalStateException("WebRTC 연결을 만들지 못했습니다.")
         peerConnection = peer
+        videoTrack.setEnabled(true)
+        val (activeWidth, activeHeight) = captureSize(BALANCED_QUALITY.shortEdge)
+        videoSource.adaptOutputFormat(activeWidth, activeHeight, BALANCED_QUALITY.fps)
         preferences.markNativeStage("answer-add-video-track")
         videoSender = peer.addTrack(videoTrack, listOf("galaxy-screen-stream"))
         val sender = videoSender ?: throw IllegalStateException("화면 영상 전송기를 만들지 못했습니다.")
@@ -173,13 +185,33 @@ class WebRtcSession(
         val safeShortEdge = shortEdge.takeIf { it in ALLOWED_SHORT_EDGES } ?: BALANCED_QUALITY.shortEdge
         val safeFps = fps.takeIf { it in ALLOWED_FRAME_RATES } ?: BALANCED_QUALITY.fps
         val (width, height) = captureSize(safeShortEdge)
-        videoSource.adaptOutputFormat(width, height, safeFps)
+        capturer.changeCaptureFormat(width, height, safeFps)
+        videoSource.adaptOutputFormat(width, height, if (peerConnection == null) 1 else safeFps)
         videoSender?.let { sender ->
             val parameters = sender.parameters
             parameters.encodings.forEach { it.maxBitrateBps = bitrateFor(safeShortEdge, safeFps) }
-            sender.setParameters(parameters)
+            if (!sender.setParameters(parameters)) throw IllegalStateException("영상 전송 설정이 거절됐습니다.")
         }
         return "${width}×${height} · ${safeFps}fps"
+    }
+
+    fun sendJson(value: JSONObject): Boolean {
+        val channel = controlChannel ?: return false
+        if (channel.state() != DataChannel.State.OPEN) return false
+        return channel.send(DataChannel.Buffer(ByteBuffer.wrap(value.toString().toByteArray(Charsets.UTF_8)), false))
+    }
+
+    fun sendClipboard(text: String): Boolean {
+        if (text.toByteArray(Charsets.UTF_8).size > 65536) return false
+        return sendJson(JSONObject().put("type", "clipboard").put("v", 1).put("text", text))
+    }
+
+    fun setAudio(enabled: Boolean): String? {
+        if (!enabled) { audio.close(); sendJson(JSONObject().put("type", "audioState").put("state", "stopped")); return null }
+        if (audioChannel?.state() != DataChannel.State.OPEN) return "AUDIO_CHANNEL_UNAVAILABLE"
+        val code = audio.start(context, (capturer as? ScreenCapturerAndroid)?.mediaProjection)
+        sendJson(JSONObject().put("type", "audioState").put("state", if (code == null) "started" else "failed").put("code", code))
+        return code
     }
 
     fun sendNotice(message: String) {
@@ -201,6 +233,15 @@ class WebRtcSession(
 
     @Synchronized
     fun closePeer() {
+        pendingSessionId = null
+        commands?.close(); commands = null
+        files?.close(); files = null
+        audio.close()
+        fileChannel?.close(); fileChannel = null
+        audioChannel?.unregisterObserver(); audioChannel?.close(); audioChannel = null
+        videoTrack.setEnabled(false)
+        val (idleWidth, idleHeight) = captureSize(540)
+        videoSource.adaptOutputFormat(idleWidth, idleHeight, 1)
         controlChannel?.unregisterObserver()
         controlChannel?.close()
         controlChannel = null
@@ -273,29 +314,53 @@ class WebRtcSession(
     }
 
     private fun registerDataChannel(channel: DataChannel) {
+        when (channel.label()) {
+            "files" -> { files?.close(); fileChannel = channel; files = RemoteFileTransfer(context, channel); return }
+            "audio-pcm" -> {
+                audioChannel = channel
+                channel.registerObserver(object : DataChannel.Observer {
+                    override fun onBufferedAmountChange(previousAmount: Long) = Unit
+                    override fun onMessage(buffer: DataChannel.Buffer) = Unit
+                    override fun onStateChange() { if (channel.state() == DataChannel.State.CLOSED) audio.close() }
+                }); return
+            }
+            "control" -> Unit
+            else -> { channel.close(); return }
+        }
         controlChannel?.unregisterObserver()
         controlChannel = channel
+        commands?.close()
+        commands = RemoteCommandProcessor(
+            send = { value ->
+                sendJson(value)
+                if (value.optString("status") in setOf("completed", "failed")) RemoteDiagnostics.record(context, "command", mapOf("status" to value.optString("status"), "code" to value.optString("code")))
+            },
+            handle = { command, finish ->
+                if (onControlResult != null) onControlResult.invoke(command, finish)
+                else finish(onControl(command), null)
+            },
+        )
+        fun capabilities() {
+            val features = JSONArray().put("commandAck").put("clipboard").put("files").put("diagnostics").put("standby")
+            if (Build.VERSION.SDK_INT >= 29) features.put("pcmAudio")
+            sendJson(JSONObject().put("type", "capabilities").put("v", 1).put("features", features))
+        }
         channel.registerObserver(object : DataChannel.Observer {
             override fun onBufferedAmountChange(previousAmount: Long) = Unit
-
             override fun onStateChange() {
-                if (channel.state() == DataChannel.State.OPEN) {
-                    sendNotice("원격 조작 채널이 연결됐어요.")
-                }
+                if (channel.state() == DataChannel.State.OPEN) { capabilities(); sendNotice("원격 조작 채널이 연결됐어요.") }
             }
-
             override fun onMessage(buffer: DataChannel.Buffer) {
-                if (buffer.binary) return
-                val data = ByteArray(buffer.data.remaining())
-                buffer.data.get(data)
+                if (buffer.binary || buffer.data.remaining() > 100000) return
+                val data = ByteArray(buffer.data.remaining()); buffer.data.get(data)
                 try {
-                    val accepted = onControl(JSONObject(String(data, Charsets.UTF_8)))
-                    if (!accepted) sendNotice("이 명령을 실행하려면 접근성 권한을 확인해 주세요.")
-                } catch (_: Exception) {
-                    sendNotice("올바르지 않은 원격 명령을 무시했습니다.")
-                }
+                    val command = JSONObject(String(data, Charsets.UTF_8))
+                    if (command.optString("type") == "hello") { capabilities(); return }
+                    commands?.receive(command)
+                } catch (_: Exception) { RemoteDiagnostics.record(context, "protocol", mapOf("code" to "INVALID_MESSAGE")) }
             }
         })
+        if (channel.state() == DataChannel.State.OPEN) capabilities()
     }
 
     private fun parseIceServers(payload: JSONArray): List<PeerConnection.IceServer> {
@@ -322,7 +387,7 @@ class WebRtcSession(
         val width: Int
         val height: Int
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.maximumWindowMetrics.bounds
+            val bounds = windowManager.currentWindowMetrics.bounds
             width = bounds.width()
             height = bounds.height()
         } else {
@@ -350,10 +415,12 @@ class WebRtcSession(
         return if (fps == 60) (base * 1.7).toInt() else base
     }
 
-    private inner class PeerObserver : PeerConnection.Observer {
+    private inner class PeerObserver(private val observerSessionId: String) : PeerConnection.Observer {
         override fun onSignalingChange(newState: PeerConnection.SignalingState?) = Unit
 
         override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {
+            if (pendingSessionId != observerSessionId) return
+            RemoteDiagnostics.record(context, "ice", mapOf("state" to (newState?.name ?: "UNKNOWN")))
             when (newState) {
                 PeerConnection.IceConnectionState.CONNECTED,
                 PeerConnection.IceConnectionState.COMPLETED,
@@ -368,6 +435,8 @@ class WebRtcSession(
         override fun onStandardizedIceConnectionChange(newState: PeerConnection.IceConnectionState?) = Unit
 
         override fun onConnectionChange(newState: PeerConnection.PeerConnectionState?) {
+            if (pendingSessionId != observerSessionId) return
+            RemoteDiagnostics.record(context, "peer", mapOf("state" to (newState?.name ?: "UNKNOWN")))
             when (newState) {
                 PeerConnection.PeerConnectionState.CONNECTED ->
                     {
@@ -387,6 +456,7 @@ class WebRtcSession(
 
         override fun onIceCandidate(candidate: IceCandidate?) {
             val sessionId = pendingSessionId ?: return
+            if (sessionId != observerSessionId) return
             candidate ?: return
             onLocalCandidate(
                 sessionId,
@@ -400,7 +470,7 @@ class WebRtcSession(
         override fun onAddStream(stream: MediaStream?) = Unit
         override fun onRemoveStream(stream: MediaStream?) = Unit
         override fun onDataChannel(channel: DataChannel?) {
-            if (channel != null) registerDataChannel(channel)
+            if (channel != null && pendingSessionId == observerSessionId) registerDataChannel(channel) else channel?.close()
         }
         override fun onRenegotiationNeeded() = Unit
         override fun onAddTrack(receiver: RtpReceiver?, mediaStreams: Array<out MediaStream>?) = Unit

@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.res.Configuration
 import android.content.pm.ServiceInfo
 import android.media.AudioManager
 import android.os.Build
@@ -32,6 +33,8 @@ class RemoteControlService : Service() {
     private var candidatePollFuture: ScheduledFuture<*>? = null
     private var candidatePollCount = 0
     private var connected = false
+    private var leaseFuture: ScheduledFuture<*>? = null
+    private var lastLeaseSuccess = 0L
     private var shuttingDown = false
     private var finishingSession = false
     private var started = false
@@ -39,6 +42,8 @@ class RemoteControlService : Service() {
     override fun onCreate() {
         super.onCreate()
         preferences = RemotePreferences(this)
+        activeInstance = this
+        RemoteDiagnostics.record(this, "service", mapOf("state" to "started"))
         executor = Executors.newSingleThreadScheduledExecutor()
         createNotificationChannel()
     }
@@ -56,10 +61,17 @@ class RemoteControlService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        webRtcSession?.setQuality(1080, 30)
+    }
+
     override fun onDestroy() {
         if (!shuttingDown) shuttingDown = true
         preferences.standbyActive = false
         candidatePollFuture?.cancel(true)
+        leaseFuture?.cancel(true)
+        if (activeInstance === this) activeInstance = null
         executor.shutdownNow()
         val session = synchronized(webRtcLock) {
             webRtcSession.also { webRtcSession = null }
@@ -145,6 +157,7 @@ class RemoteControlService : Service() {
     }
 
     private fun approveAndStartSession() {
+        RemoteDiagnostics.record(this, "connection_request", mapOf("state" to "approved"))
         val credentials = preferences.credentials ?: return
         val sessionId = currentSessionId ?: return
         val response = try {
@@ -186,6 +199,7 @@ class RemoteControlService : Service() {
                 context = this,
                 projectionPermission = permission,
                 onControl = ::handleControl,
+                onControlResult = ::handleControlResult,
                 onAnswerReady = ::submitAnswer,
                 onLocalCandidate = ::submitCandidate,
                 onConnectionState = { isConnected, message ->
@@ -194,6 +208,10 @@ class RemoteControlService : Service() {
                     updateNotification(message, isConnected)
                     if (isConnected) {
                         candidatePollCount = 0
+                        if (leaseFuture == null) {
+                            lastLeaseSuccess = System.currentTimeMillis()
+                            leaseFuture = executor.scheduleWithFixedDelay(::checkLease, 15, 15, TimeUnit.SECONDS)
+                        }
                     } else if (!shuttingDown) {
                         finishRemoteSession(message)
                     }
@@ -280,6 +298,54 @@ class RemoteControlService : Service() {
             webRtcSession?.addRemoteCandidate(value, sdpMid, sdpMLineIndex)
         }
     }
+
+    private fun checkLease() {
+        val id = currentSessionId ?: return
+        val credentials = preferences.credentials ?: run { shutdown("기기 등록이 해제됐습니다."); return }
+        try {
+            val response = ApiClient(credentials).checkLease(id)
+            if (currentSessionId != id) return
+            lastLeaseSuccess = System.currentTimeMillis()
+            if (!response.optBoolean("active")) finishRemoteSession("서버에서 연결이 종료됐습니다.")
+        } catch (error: ApiException) {
+            if (error.statusCode == 401) shutdown("기기 등록이 해제됐습니다.")
+            else if (System.currentTimeMillis() - lastLeaseSuccess > 45000) finishRemoteSession("연결 권한 확인 시간이 초과됐습니다.")
+        } catch (_: Exception) {
+            if (System.currentTimeMillis() - lastLeaseSuccess > 45000) finishRemoteSession("연결 권한 확인 시간이 초과됐습니다.")
+        }
+    }
+
+    private fun handleControlResult(command: JSONObject, finish: (Boolean, String?) -> Unit) {
+        when (command.optString("type")) {
+            "clipboardSet" -> {
+                val text = command.optString("text")
+                if (text.toByteArray(Charsets.UTF_8).size > 65536) { finish(false, "CLIPBOARD_TOO_LARGE"); return }
+                try { getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("Galaxy Remote", text)); finish(true, null) }
+                catch (_: Exception) { finish(false, "CLIPBOARD_ACCESS_RESTRICTED") }
+            }
+            "clipboardPaste" -> {
+                try { val success = RemoteKeyboardService.pasteClipboard() || RemoteAccessibilityService.pasteClipboard(); finish(success, if (success) null else "INPUT_OR_CLIPBOARD_UNAVAILABLE") }
+                catch (_: Exception) { finish(false, "CLIPBOARD_ACCESS_RESTRICTED") }
+            }
+            "audio" -> { val code = webRtcSession?.setAudio(command.optBoolean("enabled")) ?: if (webRtcSession == null) "SESSION_INACTIVE" else null; finish(code == null, code) }
+            "standby" -> {
+                val mode = command.optString("mode")
+                if (mode !in setOf("fast", "balanced", "saving")) { finish(false, "INVALID_MODE"); return }
+                preferences.standbyMode = mode; finish(true, null)
+            }
+            "diagnostics" -> {
+                val battery = getSystemService(android.os.BatteryManager::class.java).getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                webRtcSession?.sendJson(JSONObject().put("type", "diagnostic").put("data", JSONObject().put("battery", battery).put("mode", preferences.standbyMode).put("appVersion", BuildConfig.VERSION_NAME).put("requests", ConnectionListenerService.pollRequests).put("bytes", (android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid()).coerceAtLeast(0) + android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid()).coerceAtLeast(0)))))
+                finish(true, null)
+            }
+            "quality", "volume" -> { val success = handleControl(command); finish(success, if (success) null else "SESSION_INACTIVE") }
+            "text", "key" -> if (RemoteKeyboardService.dispatch(command)) finish(true, null) else RemoteAccessibilityService.dispatchWithResult(command, finish)
+            "tap", "longPress", "swipe", "global" -> RemoteAccessibilityService.dispatchWithResult(command, finish)
+            else -> finish(false, "UNSUPPORTED_COMMAND")
+        }
+    }
+
+    fun sendLocalClipboard(text: String): Boolean = webRtcSession?.sendClipboard(text) ?: false
 
     private fun handleControl(command: JSONObject): Boolean {
         when (command.optString("type")) {
@@ -392,6 +458,8 @@ class RemoteControlService : Service() {
         preferences.standbyActive = false
         sendStatus(message, false)
         candidatePollFuture?.cancel(true)
+        leaseFuture?.cancel(true)
+        if (activeInstance === this) activeInstance = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -401,6 +469,7 @@ class RemoteControlService : Service() {
         finishingSession = true
         candidatePollFuture?.cancel(false)
         candidatePollFuture = null
+        leaseFuture?.cancel(false); leaseFuture = null
         connected = false
         currentSessionId = null
         seenRemoteCandidates.clear()
@@ -428,6 +497,8 @@ class RemoteControlService : Service() {
     }
 
     companion object {
+        @Volatile var activeInstance: RemoteControlService? = null
+            private set
         const val ACTION_START = "com.galaxyremote.app.action.START"
         const val ACTION_PREPARE = "com.galaxyremote.app.action.PREPARE_TRUSTED"
         const val ACTION_CONNECT = "com.galaxyremote.app.action.CONNECT_TRUSTED"

@@ -35,6 +35,10 @@ class RemotePreferences(context: Context) {
             )
         }
 
+    var standbyMode: String
+        get() = prefs.getString("standby_mode", "balanced") ?: "balanced"
+        set(value) { if (value in setOf("fast", "balanced", "saving")) prefs.edit().putString("standby_mode", value).apply() }
+
     var standbyActive: Boolean
         get() = prefs.getBoolean(KEY_STANDBY_ACTIVE, false)
         set(value) = prefs.edit().putBoolean(KEY_STANDBY_ACTIVE, value).apply()

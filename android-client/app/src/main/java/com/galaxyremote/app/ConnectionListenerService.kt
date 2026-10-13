@@ -24,6 +24,10 @@ class ConnectionListenerService : Service() {
     private var started = false
     private var stoppedByUser = false
     private var currentRequestId: String? = null
+    private var nextPollMs = 4000L
+    private var failures = 0
+    private var requests = 0
+    private var lastHeartbeat = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -70,27 +74,42 @@ class ConnectionListenerService : Service() {
             startForeground(READY_NOTIFICATION_ID, notification)
         }
         sendStatus("PC에서 연결 시작을 누르면 승인 알림이 도착합니다.")
-        executor.scheduleWithFixedDelay(::pollForRequest, 0, 2, TimeUnit.SECONDS)
-        executor.scheduleWithFixedDelay(::sendHeartbeat, 0, 20, TimeUnit.SECONDS)
+        executor.execute(::pollLoop)
+    }
+
+    private fun pollLoop() {
+        if (executor.isShutdown) return
+        pollForRequest()
+        if (System.currentTimeMillis() - lastHeartbeat >= 60000) { sendHeartbeat(); lastHeartbeat = System.currentTimeMillis() }
+        try { executor.schedule(::pollLoop, nextPollMs, TimeUnit.MILLISECONDS) } catch (_: RejectedExecutionException) { }
     }
 
     private fun pollForRequest() {
         val credentials = preferences.credentials ?: return
         val response = try {
+            requests += 1
+            pollRequests = requests
             ApiClient(credentials).poll()
         } catch (error: ApiException) {
+            failures = (failures + 1).coerceAtMost(4); nextPollMs = (4000L shl failures).coerceAtMost(30000L)
             if (error.statusCode == 401) {
                 preferences.listenerEnabled = false
+                stopService(Intent(this, RemoteControlService::class.java))
                 stopSelf()
             } else {
                 updateReadyNotification("네트워크 연결을 다시 확인하고 있어요.")
             }
             return
         } catch (_: Exception) {
+            failures = (failures + 1).coerceAtMost(4); nextPollMs = (4000L shl failures).coerceAtMost(30000L)
             updateReadyNotification("네트워크 연결을 다시 확인하고 있어요.")
             return
         }
 
+        failures = 0
+        val minimum = when (preferences.standbyMode) { "fast" -> 1800L; "saving" -> 12000L; else -> 4000L }
+        nextPollMs = maxOf(minimum, response.optLong("pollAfterMs", 1800L).coerceIn(1000L, 30000L))
+        if (RemoteControlService.activeInstance != null && requests % 15 == 0) RemoteDiagnostics.record(this, "standby", mapOf("pollMs" to nextPollMs, "requests" to requests, "mode" to preferences.standbyMode))
         val session = response.optJSONObject("session")
         if (session == null) {
             if (currentRequestId != null) {
@@ -104,6 +123,7 @@ class ConnectionListenerService : Service() {
         val expiresAt = session.optLong("expiresAt", 0L)
         if (sessionId.isBlank() || expiresAt <= System.currentTimeMillis()) return
         if (sessionId == currentRequestId) return
+        RemoteDiagnostics.record(this, "connection_request", mapOf("state" to "received"))
         currentRequestId = sessionId
         if (RemoteControlService.isProjectionReady()) {
             connectTrustedRequest(sessionId)
@@ -200,7 +220,7 @@ class ConnectionListenerService : Service() {
     private fun screenSize(): Pair<Int, Int> {
         val windowManager = getSystemService(WindowManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.maximumWindowMetrics.bounds
+            val bounds = windowManager.currentWindowMetrics.bounds
             return bounds.width() to bounds.height()
         }
         val metrics = DisplayMetrics()
@@ -279,6 +299,9 @@ class ConnectionListenerService : Service() {
     }
 
     companion object {
+        @Volatile var pollRequests = 0
+            private set
+
         const val ACTION_START = "com.galaxyremote.app.action.LISTEN"
         const val ACTION_STOP = "com.galaxyremote.app.action.STOP_LISTENING"
         const val ACTION_REJECT = "com.galaxyremote.app.action.REJECT_SESSION"

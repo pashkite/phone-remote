@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { normalizedVideoPoint } from "./remote-geometry";
+import RemoteTools from "./components/remote-tools";
+import { RemoteClient } from "../lib/remote/client";
+import { Diagnostics } from "../lib/remote/diagnostics";
 
 type ConnectionState = "offline" | "waiting" | "reconnecting" | "connected";
 type PcMode = "personal" | "public";
@@ -57,7 +60,6 @@ function versionAtLeast(version: string, minimumVersion: readonly number[]) {
   }
   return true;
 }
-
 function supportsNotificationApproval(version: string) {
   return versionAtLeast(version, MINIMUM_NOTIFICATION_APP_VERSION);
 }
@@ -86,15 +88,15 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const [pairing, setPairing] = useState<PairingInfo | null>(null);
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingError, setPairingError] = useState<string | null>(null);
-  const [volume, setVolume] = useState(62);
+  const [volume, setVolume] = useState(50);
+  const [volumeKnown, setVolumeKnown] = useState(false);
   const [resolution, setResolution] = useState<ResolutionSetting>(1080);
   const [frameRate, setFrameRate] = useState<FrameRateSetting>(30);
   const [pcMode, setPcMode] = useState<PcMode>("public");
   const [detachedOpacity, setDetachedOpacity] = useState(100);
-  const [detachedControlsOpen, setDetachedControlsOpen] = useState(false);
-  const [detachedControlsAlwaysVisible, setDetachedControlsAlwaysVisible] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [detachedWindow, setDetachedWindow] = useState<Window | null>(null);
+  const [videoAspectRatio, setVideoAspectRatio] = useState(9 / 19.5);
   const [metrics, setMetrics] = useState<ConnectionMetrics>({
     latency: null,
     width: null,
@@ -104,6 +106,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     packetLoss: null,
     path: null,
   });
+  const [diagnostics] = useState(() => new Diagnostics());
   const [toast, setToast] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [connectionHint, setConnectionHint] = useState<string | null>(null);
@@ -116,10 +119,13 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const wheelFlushTimerRef = useRef<number | null>(null);
   const keyboardRef = useRef<HTMLInputElement>(null);
   const detachedKeyboardRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLElement>(null);
   const viewerRef = useRef<HTMLElement>(null);
   const phoneViewRef = useRef<HTMLDivElement>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
+  const toolsRef = useRef<RemoteClient | null>(null);
+  const [toolsClient, setToolsClient] = useState<RemoteClient | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const answerPollRef = useRef<number | null>(null);
   const statsTimerRef = useRef<number | null>(null);
@@ -136,6 +142,37 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const frameRateRef = useRef<FrameRateSetting>(30);
 
   useEffect(() => {
+    if (!dialog || !modalRef.current) return;
+    const modal = modalRef.current;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const items = () => Array.from(modal.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]')).filter(el => el.getClientRects().length > 0);
+    (items()[0] ?? modal).focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); setDialog(null); }
+      if (event.key !== "Tab") return;
+      const targets = items(), first = targets[0], last = targets.at(-1);
+      if (!first || !last) { event.preventDefault(); modal.focus(); return; }
+      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => { document.removeEventListener("keydown", keydown); document.body.style.overflow = overflow; previous?.focus(); };
+  }, [dialog]);
+
+  const syncVideoAspectRatio = useCallback((video: HTMLVideoElement) => {
+    const { videoWidth, videoHeight } = video;
+    if (!videoWidth || !videoHeight) return;
+    const nextRatio = videoWidth / videoHeight;
+    detachedRatioRef.current = nextRatio;
+    setVideoAspectRatio((current) => Math.abs(current - nextRatio) < 0.001 ? current : nextRatio);
+    if (detachedWindow && !detachedWindow.closed) {
+      detachedWindow.dispatchEvent(new Event("galaxy-phone-ratio-change"));
+    }
+  }, [detachedWindow]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       const storedMode = window.localStorage.getItem("galaxy-remote-pc-mode");
       const mode: PcMode = storedMode === "personal" ? "personal" : "public";
@@ -145,9 +182,6 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         if (Number.isFinite(storedOpacity) && storedOpacity >= 20 && storedOpacity <= 100) {
           setDetachedOpacity(Math.round(storedOpacity));
         }
-        setDetachedControlsAlwaysVisible(
-          window.localStorage.getItem("galaxy-remote-detached-controls-always-visible") === "true",
-        );
       }
       setPreferencesLoaded(true);
     }, 0);
@@ -159,16 +193,11 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     if (pcMode === "personal") {
       window.localStorage.setItem("galaxy-remote-pc-mode", "personal");
       window.localStorage.setItem("galaxy-remote-detached-opacity", String(detachedOpacity));
-      window.localStorage.setItem(
-        "galaxy-remote-detached-controls-always-visible",
-        String(detachedControlsAlwaysVisible),
-      );
     } else {
       window.localStorage.removeItem("galaxy-remote-pc-mode");
       window.localStorage.removeItem("galaxy-remote-detached-opacity");
-      window.localStorage.removeItem("galaxy-remote-detached-controls-always-visible");
     }
-  }, [detachedControlsAlwaysVisible, detachedOpacity, pcMode, preferencesLoaded]);
+  }, [detachedOpacity, pcMode, preferencesLoaded]);
 
   const attachDetachedVideo = useCallback((node: HTMLVideoElement | null) => {
     detachedVideoRef.current = node;
@@ -247,6 +276,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }, []);
 
   const closeConnection = useCallback(async (notifyServer = true, intentional = true) => {
+    diagnostics.record("connection", { state: "closed" });
     intentionalCloseRef.current = intentional;
     if (intentional && reconnectTimerRef.current) {
       window.clearTimeout(reconnectTimerRef.current);
@@ -254,6 +284,10 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       reconnectAttemptsRef.current = 0;
     }
     stopTimers();
+    toolsRef.current?.close();
+    toolsRef.current = null;
+    setToolsClient(null);
+    setVolumeKnown(false);
     const sessionId = sessionIdRef.current;
     sessionIdRef.current = null;
     if (channelRef.current) {
@@ -292,7 +326,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         // best-effort server cleanup cannot reach the network.
       });
     }
-  }, [stopTimers]);
+  }, [stopTimers, diagnostics]);
 
   useEffect(() => () => { void closeConnection(false, true); }, [closeConnection]);
 
@@ -330,12 +364,22 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         const chromeWidth = Math.max(0, detachedWindow.outerWidth - currentWidth);
         const chromeHeight = Math.max(0, detachedWindow.outerHeight - currentHeight);
         const widthIsDriver = !forceFromHeight && widthChanged >= heightChanged;
-        const targetWidth = widthIsDriver
+        let targetWidth = widthIsDriver
           ? currentWidth
           : Math.round(currentHeight * ratio);
-        const targetHeight = widthIsDriver
+        let targetHeight = widthIsDriver
           ? Math.round(currentWidth / ratio)
           : currentHeight;
+        const maxWidth = Math.max(320, detachedWindow.screen.availWidth - chromeWidth);
+        const maxHeight = Math.max(240, detachedWindow.screen.availHeight - chromeHeight);
+        if (targetWidth > maxWidth) {
+          targetWidth = maxWidth;
+          targetHeight = Math.round(targetWidth / ratio);
+        }
+        if (targetHeight > maxHeight) {
+          targetHeight = maxHeight;
+          targetWidth = Math.round(targetHeight * ratio);
+        }
         previousWidth = targetWidth;
         previousHeight = targetHeight;
         if (Math.abs(currentWidth - targetWidth) < 2 && Math.abs(currentHeight - targetHeight) < 2) return;
@@ -421,8 +465,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   function sendPayload(payload: Record<string, unknown>) {
     const channel = channelRef.current;
     if (!channel || channel.readyState !== "open") return false;
-    channel.send(JSON.stringify(payload));
-    return true;
+    try { return toolsRef.current ? toolsRef.current.send(payload) : (channel.send(JSON.stringify(payload)), true); } catch { return false; }
   }
 
   function startStats(peer: RTCPeerConnection) {
@@ -463,7 +506,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         });
         let path: ConnectionMetrics["path"] = null;
         if (selectedPair) {
-          const pair = selectedPair as RTCStats & { localCandidateId?: string; remoteCandidateId?: string };
+          const pair = selectedPair as RTCStats & { localCandidateId?: string; remoteCandidateId?: string; currentRoundTripTime?: number };
           const local = pair.localCandidateId ? report.get(pair.localCandidateId) : null;
           const remote = pair.remoteCandidateId ? report.get(pair.remoteCandidateId) : null;
           path = local?.candidateType === "relay" || remote?.candidateType === "relay" ? "turn" : "direct";
@@ -482,6 +525,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           ? Math.round((Math.max(0, packetsLost) / packetTotal) * 1_000) / 10
           : null;
         setMetrics({ latency, width, height, fps, bitrateKbps, packetLoss, path });
+        toolsRef.current?.diagnostics.record("metrics", { latency, width, height, fps, bitrateKbps, packetLoss, path });
       } catch {
         // A transient stats failure should not interrupt the remote session.
       }
@@ -494,7 +538,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       return;
     }
     if (!supportsNotificationApproval(selectedDevice.appVersion)) {
-      setConnectionError("휴대폰 앱을 v0.4.3으로 업데이트한 뒤 다시 눌러 주세요. 기기 등록은 유지됩니다.");
+      setConnectionError("휴대폰 앱을 v0.4.5로 업데이트한 뒤 다시 눌러 주세요. 기기 등록은 유지됩니다.");
       setToast("앱 업데이트가 필요해요.");
       setDialog("settings");
       return;
@@ -527,6 +571,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
       const { sessionId } = (await sessionResponse.json()) as { sessionId: string };
       const { iceServers } = (await iceResponse.json()) as { iceServers: RTCIceServer[] };
+      diagnostics.record("connection_request", { state: "created" });
       sessionIdRef.current = sessionId;
 
       const peer = new RTCPeerConnection({
@@ -591,7 +636,11 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
       const channel = peer.createDataChannel("control", { ordered: true });
       channelRef.current = channel;
+      const tools = new RemoteClient(channel, peer, () => videoRef.current, () => remoteStreamRef.current, diagnostics);
+      toolsRef.current = tools;
+      setToolsClient(tools);
       channel.onopen = () => {
+        tools.opened();
         setConnection("connected");
         setConnectionError(null);
         setConnectionHint(null);
@@ -605,14 +654,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           queueReconnect("원격 조작 채널이 닫혔습니다.");
         }
       };
-      channel.onmessage = (event) => {
-        try {
-          const message = JSON.parse(String(event.data)) as { type?: string; message?: string };
-          if (message.type === "notice" && message.message) setToast(message.message);
-        } catch {
-          // Ignore malformed device notices.
-        }
-      };
+
 
       const offer = await peer.createOffer({ offerToReceiveAudio: false });
       await peer.setLocalDescription(offer);
@@ -648,6 +690,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           };
           const state = payload.session?.state ?? "";
           if (state !== lastState) {
+            diagnostics.record("connection_request", { state });
             lastState = state;
             if (state === "consent_pending") {
               setConnectionHint("휴대폰의 Android 화면 공유 확인창을 승인해 주세요.");
@@ -727,6 +770,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   function changeVolume(next: number) {
     const normalized = Math.max(0, Math.min(100, next));
     setVolume(normalized);
+    setVolumeKnown(true);
     if (connected) sendPayload({ type: "volume", value: normalized });
   }
 
@@ -754,8 +798,6 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     setPcMode(next);
     if (next === "public") {
       setDetachedOpacity(100);
-      setDetachedControlsAlwaysVisible(false);
-      setDetachedControlsOpen(false);
     }
     setToast(next === "public" ? "공용 PC 모드로 전환했습니다." : "개인 PC 설정을 기억합니다.");
   }
@@ -765,7 +807,6 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     setDetachedOpacity(100);
     window.localStorage.removeItem("galaxy-remote-pc-mode");
     window.localStorage.removeItem("galaxy-remote-detached-opacity");
-    window.localStorage.removeItem("galaxy-remote-detached-controls-always-visible");
     window.sessionStorage.clear();
     if (detachedWindow && !detachedWindow.closed) detachedWindow.close();
     setDetachedWindow(null);
@@ -805,7 +846,6 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     if (detachedWindow && !detachedWindow.closed) {
       detachedWindow.close();
       setDetachedWindow(null);
-      setDetachedControlsOpen(false);
       return;
     }
     const ratio = (videoRef.current?.videoWidth && videoRef.current.videoHeight)
@@ -832,24 +872,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         .detached-phone-view { position: relative; width: 100vw; height: 100vh; overflow: hidden; cursor: crosshair; touch-action: none; background: #070b12; user-select: none; }
         .detached-phone-view video { display: block; width: 100%; height: 100%; object-fit: contain; background: #070b12; }
         .detached-message { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; color: #dbe8fb; background: linear-gradient(145deg, #121c2c, #070b12); font: 750 13px Pretendard, "Noto Sans KR", sans-serif; text-align: center; }
-        .detached-settings-button { position: fixed; z-index: 11; top: 10px; right: 10px; width: 34px; height: 34px; padding: 0; border: 1px solid rgba(255,255,255,.24); border-radius: 10px; display: grid; place-items: center; color: #eef5ff; background: rgba(12,20,33,.72); box-shadow: 0 5px 18px rgba(0,0,0,.26); cursor: pointer; font: 800 20px/1 Pretendard, "Noto Sans KR", sans-serif; backdrop-filter: blur(10px); }
-        .detached-settings-button:hover, .detached-settings-button[aria-expanded="true"] { border-color: rgba(120,174,255,.72); background: rgba(37,82,143,.84); }
-        .detached-toolbar { position: fixed; z-index: 10; top: 52px; right: 10px; width: min(300px, calc(100vw - 20px)); max-height: calc(100vh - 62px); overflow: auto; padding: 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; color: #eef5ff; background: rgba(12,20,33,.9); box-shadow: 0 8px 28px rgba(0,0,0,.3); font: 700 11px Pretendard, "Noto Sans KR", sans-serif; backdrop-filter: blur(12px); cursor: default; }
-        .detached-toolbar-row { display: grid; grid-template-columns: auto minmax(72px,1fr) auto; align-items: center; gap: 8px; }
-        .detached-toolbar input { min-width: 72px; accent-color: #5b9cff; }
-        .detached-toolbar button, .detached-toolbar select { min-width: 52px; height: 30px; border: 1px solid rgba(255,255,255,.22); border-radius: 7px; color: inherit; background: rgba(255,255,255,.1); cursor: pointer; font: inherit; }
-        .detached-toolbar select { width: 100%; }
-        .detached-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
-        .detached-quality-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-        .detached-quality-grid label { display: grid; gap: 5px; color: rgba(238,245,255,.78); }
-        .detached-ratio-note { margin: 10px 0 0; color: rgba(238,245,255,.68); font-size: 10px; }
-        .detached-always-visible { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.14); display: flex; align-items: center; gap: 8px; }
-        .detached-always-visible input { min-width: 0; margin: 0; }
         .detached-keyboard-capture { position: absolute; width: 1px; height: 1px; opacity: .01; pointer-events: none; }
-        @media (max-width: 360px), (max-height: 480px) { .detached-toolbar { width: min(260px, calc(100vw - 16px)); top: 48px; right: 8px; padding: 9px; } .detached-settings-button { top: 8px; right: 8px; width: 32px; height: 32px; } }
       `;
       nextWindow.document.head.appendChild(style);
-      setDetachedControlsOpen(false);
       setDetachedWindow(nextWindow);
       nextWindow.focus();
     } catch {
@@ -1003,6 +1028,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           <span className={`connection-pill ${connection}`}><span className="status-dot" />{connected ? "연결됨" : connection === "reconnecting" ? "재연결 중" : waiting ? "승인 대기" : "연결 준비"}</span>
         </div>
         <div className="owner-area">
+          <div className="pc-session"><span>{pcMode === "public" ? "공용 PC 사용 중" : "개인 PC"}</span><button type="button" onClick={() => void endPublicSession()}>사용 종료</button></div>
           <div className="avatar" aria-hidden="true">{initials}</div>
           <div className="owner-copy"><strong>{displayName}</strong><span>{email ? "Owner" : "소유자 전용"}</span></div>
           <button className="icon-button" type="button" aria-label="설정" onClick={() => setDialog("settings")}>⚙</button>
@@ -1020,9 +1046,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 value={selectedDevice?.id ?? ""}
                 onChange={(event) => setSelectedDeviceId(event.target.value || null)}
               >
-                {devices.length ? devices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>) : <option value="">Galaxy S26 Ultra</option>}
+                {devices.length ? devices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>) : <option value="">등록된 기기 없음</option>}
               </select>
-              <select
+              <details className="display-settings"><summary>화면 설정</summary><div className="display-settings-panel"><label>해상도<select
                 className="quality-select"
                 aria-label="화면 해상도"
                 value={resolution}
@@ -1031,8 +1057,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 <option value={540}>540p</option>
                 <option value={1080}>1080p</option>
                 <option value={1440}>1440p</option>
-              </select>
-              <select
+              </select></label><label>초당 프레임<select
                 className="quality-select"
                 aria-label="화면 프레임"
                 value={frameRate}
@@ -1041,7 +1066,18 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 <option value={24}>24fps</option>
                 <option value={30}>30fps</option>
                 <option value={60}>60fps</option>
-              </select>
+              </select></label><label>분리 창 투명도<select
+                className="quality-select"
+                aria-label="분리 창 투명도"
+                title="분리 창 투명도"
+                value={detachedOpacity}
+                onChange={(event) => setDetachedOpacity(Number(event.target.value))}
+              >
+                <option value={25}>투명도 25%</option>
+                <option value={50}>투명도 50%</option>
+                <option value={75}>투명도 75%</option>
+                <option value={100}>투명도 100%</option>
+              </select></label></div></details>
               <button className="viewer-button" type="button" aria-pressed={Boolean(detachedWindow)} onClick={() => void toggleDetachedScreen()}>
                 {detachedWindow ? "화면 창 닫기" : "화면 분리"}
               </button>
@@ -1051,8 +1087,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           </div>
           <div className="screen-stage">
             <div
-              className={`phone-view ${connected ? "is-live" : ""}`}
+              className={`phone-view ${videoAspectRatio > 1 ? "is-landscape" : "is-portrait"} ${connected ? "is-live" : ""}`}
               ref={phoneViewRef}
+              style={{ aspectRatio: videoAspectRatio }}
               tabIndex={connected ? 0 : -1}
               role="application"
               aria-label="연결된 휴대폰 원격 화면"
@@ -1062,7 +1099,14 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               onWheel={onRemoteWheel}
               onKeyDown={onPhoneKeyDown}
             >
-              <video ref={videoRef} autoPlay playsInline aria-label="연결된 휴대폰 화면" />
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                aria-label="연결된 휴대폰 화면"
+                onLoadedMetadata={(event) => syncVideoAspectRatio(event.currentTarget)}
+                onResize={(event) => syncVideoAspectRatio(event.currentTarget)}
+              />
               <input
                 ref={keyboardRef}
                 className="remote-keyboard-capture"
@@ -1079,7 +1123,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 <div className="screen-placeholder">
                   <div className="placeholder-orbit" aria-hidden="true"><span /></div>
                   <strong>{waiting ? "휴대폰 응답을 기다리는 중" : selectedDevice ? "휴대폰이 아직 연결되지 않았어요" : "아직 등록된 휴대폰이 없어요"}</strong>
-                  <p>{waiting ? "휴대폰에 도착한 알림에서 승인해 주세요." : selectedDevice ? "휴대폰의 연결 요청 알림을 켜두면 여기서 바로 요청할 수 있어요." : "전용 앱으로 기기를 등록하면 이곳에서 바로 보고 조작할 수 있어요."}</p>
+                  <p>{waiting ? "휴대폰 알림을 확인해 주세요. 자동 연결 준비 상태라면 바로 연결됩니다." : selectedDevice ? "휴대폰의 연결 요청 알림을 켜두면 여기서 바로 요청할 수 있어요." : "전용 앱으로 기기를 등록하면 이곳에서 바로 보고 조작할 수 있어요."}</p>
                   <button type="button" onClick={selectedDevice ? beginConnection : openPairing}>{selectedDevice ? "연결 시작" : "기기 등록하기"}</button>
                 </div>
               )}
@@ -1096,7 +1140,6 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               role="application"
               aria-label="분리된 휴대폰 원격 화면"
               onPointerDown={(event) => {
-                if (!detachedControlsAlwaysVisible) setDetachedControlsOpen(false);
                 if (!connected) return;
                 event.currentTarget.setPointerCapture(event.pointerId);
                 const point = normalizedPointer(event, detachedVideoRef.current);
@@ -1125,18 +1168,10 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 aria-label="분리된 휴대폰 화면"
                 onCanPlay={(event) => { void event.currentTarget.play(); }}
                 onLoadedMetadata={(event) => {
-                  const { videoWidth, videoHeight } = event.currentTarget;
-                  if (!videoWidth || !videoHeight) return;
-                  detachedRatioRef.current = videoWidth / videoHeight;
-                  detachedWindow.dispatchEvent(new Event("galaxy-phone-ratio-change"));
+                  syncVideoAspectRatio(event.currentTarget);
                 }}
                 onResize={(event) => {
-                  const { videoWidth, videoHeight } = event.currentTarget;
-                  if (!videoWidth || !videoHeight) return;
-                  const nextRatio = videoWidth / videoHeight;
-                  if (Math.abs(nextRatio - detachedRatioRef.current) < 0.001) return;
-                  detachedRatioRef.current = nextRatio;
-                  detachedWindow.dispatchEvent(new Event("galaxy-phone-ratio-change"));
+                  syncVideoAspectRatio(event.currentTarget);
                 }}
               />
               <input
@@ -1151,60 +1186,6 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 onInput={onKeyboardInput}
                 onKeyDown={onKeyboardKeyDown}
               />
-              <button
-                className="detached-settings-button"
-                type="button"
-                aria-label="분리 창 설정"
-                aria-expanded={detachedControlsAlwaysVisible || detachedControlsOpen}
-                onPointerDown={(event) => event.stopPropagation()}
-                onPointerUp={(event) => event.stopPropagation()}
-                onClick={() => setDetachedControlsOpen((current) => !current)}
-              >
-                ⋯
-              </button>
-              {(detachedControlsAlwaysVisible || detachedControlsOpen) && (
-                <section className="detached-toolbar" aria-label="분리 창 화면 설정" onPointerDown={(event) => event.stopPropagation()} onPointerUp={(event) => event.stopPropagation()}>
-                  <div className="detached-toolbar-row">
-                    <label htmlFor="detached-opacity">투명도</label>
-                    <input id="detached-opacity" type="range" min="20" max="100" step="1" value={detachedOpacity} onChange={(event) => setDetachedOpacity(Number(event.target.value))} />
-                    <output>{detachedOpacity}%</output>
-                  </div>
-                  <div className="detached-presets" aria-label="투명도 빠른 선택">
-                    {[25, 50, 75, 100].map((value) => <button key={value} type="button" onClick={() => setDetachedOpacity(value)}>{value}%</button>)}
-                  </div>
-                  <div className="detached-quality-grid">
-                    <label>
-                      해상도
-                      <select aria-label="분리 창 화면 해상도" value={resolution} onChange={(event) => changeResolution(Number(event.target.value) as ResolutionSetting)}>
-                        <option value={540}>540p</option>
-                        <option value={1080}>1080p</option>
-                        <option value={1440}>1440p</option>
-                      </select>
-                    </label>
-                    <label>
-                      프레임
-                      <select aria-label="분리 창 화면 프레임" value={frameRate} onChange={(event) => changeFrameRate(Number(event.target.value) as FrameRateSetting)}>
-                        <option value={24}>24fps</option>
-                        <option value={30}>30fps</option>
-                        <option value={60}>60fps</option>
-                      </select>
-                    </label>
-                  </div>
-                  <p className="detached-ratio-note">화면 비율은 기기 회전에 맞춰 자동 유지됩니다.</p>
-                  <label className="detached-always-visible">
-                    <input
-                      type="checkbox"
-                      checked={detachedControlsAlwaysVisible}
-                      onChange={(event) => {
-                        const next = event.target.checked;
-                        setDetachedControlsAlwaysVisible(next);
-                        setDetachedControlsOpen(next);
-                      }}
-                    />
-                    분리창 컨트롤 항상 표시
-                  </label>
-                </section>
-              )}
               {!connected && <div className="detached-message">휴대폰 연결을 기다리는 중이에요.</div>}
             </div>
           </main>,
@@ -1214,25 +1195,18 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         <aside className="control-rail" aria-label="원격 제어 도구">
           <section className="control-card connect-card">
             <p className="eyebrow">REMOTE CONTROL</p><h2>원격 제어</h2>
-            <p>{connectionError ?? connectionHint ?? (waiting ? "휴대폰의 승인을 기다리고 있어요." : connected ? "암호화된 연결을 사용하고 있어요." : selectedDevice ? "웹에서 요청하면 휴대폰 승인 알림이 도착합니다." : "먼저 휴대폰을 등록해 주세요.")}</p>
+            <p>{connectionError ?? connectionHint ?? (waiting ? "휴대폰 응답을 기다리고 있어요." : connected ? "암호화된 연결을 사용하고 있어요." : selectedDevice ? "자동 연결 준비 상태이면 바로 연결됩니다. 그 외에는 휴대폰에서 승인해 주세요." : "먼저 휴대폰을 등록해 주세요.")}</p>
             <button className="primary-action" type="button" onClick={selectedDevice ? beginConnection : openPairing} disabled={waiting || connection === "reconnecting"}>
               {waiting || connection === "reconnecting" ? <><span className="spinner" /> {connection === "reconnecting" ? "재연결 중" : "연결하는 중"}</> : connected ? "연결 새로고침" : selectedDevice ? (connectionError ? "재연결" : "연결 시작") : "기기 등록"}
             </button>
             <div className="device-row">
-              <span className={`status-dot ${selectedDevice?.online ? "online" : ""}`} /><strong>{selectedDevice?.name ?? "Galaxy S26 Ultra"}</strong>
+              <span className={`status-dot ${selectedDevice?.online ? "online" : ""}`} /><strong>{selectedDevice?.name ?? "등록된 기기 없음"}</strong>
               <span>{selectedDevice ? `${selectedDevice.online ? "온라인" : "오프라인"}${selectedDevice.batteryLevel !== null ? ` · ${selectedDevice.batteryLevel}%` : ""}` : "미등록"}</span>
             </div>
           </section>
 
-          <section className="control-card metrics-card" aria-label="연결 정보">
-            <div className="metric"><span className="metric-icon">↔</span><small>경로</small><strong>{connected ? metrics.path === "turn" ? "TURN" : metrics.path === "direct" ? "직접" : "확인 중" : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">▮▮▮</span><small>지연</small><strong>{connected && metrics.latency !== null ? `${metrics.latency} ms` : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">HD</span><small>해상도</small><strong>{connected && metrics.width && metrics.height ? `${metrics.width}×${metrics.height}` : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">▶</span><small>프레임</small><strong>{connected && metrics.fps !== null ? `${metrics.fps} fps` : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">⇣</span><small>비트레이트</small><strong>{connected && metrics.bitrateKbps !== null ? `${metrics.bitrateKbps} kbps` : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">%</span><small>손실</small><strong>{connected && metrics.packetLoss !== null ? `${metrics.packetLoss}%` : "—"}</strong></div>
-          </section>
-
+          {!selectedDevice && <section className="control-card setup-guide"><h3>처음 연결하나요?</h3><ol><li><strong>휴대폰에 앱 설치</strong><p>‘기기 등록’을 열어 설치 파일을 받으세요.</p></li><li><strong>6자리 코드 입력</strong><p>휴대폰 앱에 웹에서 만든 코드를 입력하세요.</p></li><li><strong>연결 준비</strong><p>앱에서 조작 권한과 연결 요청 알림을 켜세요. 원격 키보드는 선택 사항입니다.</p></li></ol></section>}
+          {selectedDevice && <>
           <section className="control-card quick-card">
             <div className="section-title-row"><h3>빠른 제어</h3><span>{connected ? "사용 가능" : "연결 후 사용"}</span></div>
             <div className="quick-grid">
@@ -1240,35 +1214,50 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             </div>
           </section>
 
+          <RemoteTools key={toolsClient?.id ?? "offline"} client={toolsClient} diagnostics={diagnostics} />
+
           <section className="control-card volume-card">
-            <div className="volume-label"><strong>볼륨</strong><span aria-hidden="true">◖))</span></div>
+            <div className="volume-label"><strong>볼륨 설정</strong><span aria-hidden="true">◖))</span></div>
             <button type="button" disabled={!connected} aria-label="볼륨 낮추기" onClick={() => changeVolume(volume - 5)}>−</button>
-            <input type="range" min="0" max="100" value={volume} disabled={!connected} aria-label="휴대폰 볼륨" onChange={(event) => changeVolume(Number(event.target.value))} style={{ "--volume": `${volume}%` } as React.CSSProperties} />
-            <output>{volume}%</output><button type="button" disabled={!connected} aria-label="볼륨 높이기" onClick={() => changeVolume(volume + 5)}>+</button>
+            <input type="range" min="0" max="100" value={volume} disabled={!connected} aria-label="휴대폰 볼륨 설정" aria-valuetext={connected && volumeKnown ? `${volume}%` : "아직 볼륨을 설정하지 않음"} onChange={(event) => changeVolume(Number(event.target.value))} style={{ "--volume": `${volume}%` } as React.CSSProperties} />
+            <output>{connected && volumeKnown ? `${volume}%` : "—"}</output><button type="button" disabled={!connected} aria-label="볼륨 높이기" onClick={() => changeVolume(volume + 5)}>+</button>
           </section>
 
+          {connected && <details className="control-card connection-details"><summary>상세 연결 정보</summary>          <div className="metrics-card" aria-label="연결 정보">
+            <div className="metric"><span className="metric-icon">↔</span><small>경로</small><strong>{connected ? metrics.path === "turn" ? "중계" : metrics.path === "direct" ? "직접" : "확인 중" : "—"}</strong></div>
+            <div className="metric"><span className="metric-icon">▮▮▮</span><small>지연</small><strong>{connected && metrics.latency !== null ? `${metrics.latency} ms` : "—"}</strong></div>
+            <div className="metric"><span className="metric-icon">HD</span><small>해상도</small><strong>{connected && metrics.width && metrics.height ? `${metrics.width}×${metrics.height}` : "—"}</strong></div>
+            <div className="metric"><span className="metric-icon">▶</span><small>프레임</small><strong>{connected && metrics.fps !== null ? `${metrics.fps} fps` : "—"}</strong></div>
+            <div className="metric"><span className="metric-icon">⇣</span><small>비트레이트</small><strong>{connected && metrics.bitrateKbps !== null ? `${metrics.bitrateKbps} kbps` : "—"}</strong></div>
+            <div className="metric"><span className="metric-icon">%</span><small>손실</small><strong>{connected && metrics.packetLoss !== null ? `${metrics.packetLoss}%` : "—"}</strong></div>
+          </div>
+
+</details>}
           <button className="disconnect-button" type="button" disabled={!connected && !waiting} onClick={() => setDialog("disconnect")}>연결 해제</button>
-          <section className="privacy-note"><span className="shield" aria-hidden="true">◇</span><div><strong>승인한 세션에서만 화면을 전송해요</strong><p>웹 요청마다 휴대폰에서 승인하며 영상과 키 입력 내용은 서버에 저장하지 않습니다.</p></div></section>
+          </>}
+          <section className="privacy-note"><span className="shield" aria-hidden="true">◇</span><div><strong>휴대폰에서 허용한 동안만 연결해요</strong><p>일반 연결은 휴대폰에서 승인합니다. 앱에서 자동 연결을 준비한 동안에는 추가 승인 없이 연결됩니다. 영상과 키 입력은 서버에 저장하지 않습니다.</p></div></section>
         </aside>
       </section>
 
       {dialog === "pair" && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setDialog(null)}>
-          <section className="modal" role="dialog" aria-modal="true" aria-labelledby="pair-title" onMouseDown={(event) => event.stopPropagation()}>
+          <section ref={modalRef} tabIndex={-1} className="modal" role="dialog" aria-modal="true" aria-labelledby="pair-title" onMouseDown={(event) => event.stopPropagation()}>
             <button className="modal-close" type="button" aria-label="닫기" onClick={() => setDialog(null)}>×</button>
             <p className="eyebrow">DEVICE PAIRING</p><h2 id="pair-title">갤럭시를 등록해 주세요</h2>
             <p>Galaxy Remote 앱을 연 다음 아래 6자리 코드를 입력하면 이 계정에 안전하게 등록됩니다.</p>
+            <h3>1. 휴대폰에 앱 설치</h3>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.5-rotation-fixed-release.apk" download>
+              <span aria-hidden="true">↓</span>
+              <strong>Galaxy Remote APK 받기</strong>
+              <small>Galaxy arm64 v0.4.5 · 15MB · 화면 회전·입력 안내 문구 오인식 수정</small>
+            </a>
+            <details className="install-help"><summary>기존 앱을 업데이트하나요?</summary><p>v0.4.0 이후 버전은 기존 앱 위에 설치하세요. v0.3.1 이하는 기존 앱을 삭제한 뒤 새로 등록해야 합니다.</p></details>
+            <h3>2. 앱에 등록 코드 입력</h3>
             <div className="pair-code-panel">
               {pairingBusy ? <span className="pair-code-loading"><span className="spinner blue" /> 코드 만드는 중</span> : pairing ? <><strong>{pairing.code.slice(0, 3)} {pairing.code.slice(3)}</strong><small>10분 동안 한 번만 사용할 수 있어요.</small></> : <span>코드를 만들지 못했습니다.</span>}
             </div>
             {pairingError && <p className="modal-error" role="alert">{pairingError}</p>}
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.3-fixed-release.apk" download>
-              <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote APK 받기</strong>
-              <small>Galaxy arm64 v0.4.3 · 15MB · 해상도·프레임 개별 설정 · 자동 연결·길게 누르기 지원</small>
-            </a>
-            <p className="install-warning">v0.4.0·v0.4.1과 같은 서명키로 만든 업데이트입니다. 해당 버전은 삭제하지 말고 그대로 설치하세요. v0.3.1 이하는 서명키가 달라 기존 앱 삭제가 필요합니다.</p>
-            <div className="modal-note"><span>1</span> 설치·업데이트 <b>→</b><span>2</span> 권한 설정 <b>→</b><span>3</span> 웹에서 연결</div>
+            <h3>3. 연결 준비</h3><p>앱에서 조작 권한과 연결 요청 알림을 켜세요. 원격 키보드는 선택 사항입니다.</p>
             <div className="pair-actions">
               <button type="button" onClick={createPairingCode} disabled={pairingBusy}>새 코드</button>
               <button className="primary-action" type="button" onClick={verifyPairing}>등록됐는지 확인</button>
@@ -1279,7 +1268,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
       {dialog === "disconnect" && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setDialog(null)}>
-          <section className="modal compact" role="alertdialog" aria-modal="true" aria-labelledby="disconnect-title" onMouseDown={(event) => event.stopPropagation()}>
+          <section ref={modalRef} tabIndex={-1} className="modal compact" role="alertdialog" aria-modal="true" aria-labelledby="disconnect-title" onMouseDown={(event) => event.stopPropagation()}>
             <h2 id="disconnect-title">원격 연결을 해제할까요?</h2><p>휴대폰 화면 전송과 모든 원격 조작이 즉시 중지됩니다.</p>
             <div className="modal-actions"><button type="button" onClick={() => setDialog(null)}>취소</button><button className="danger" type="button" onClick={() => { void closeConnection(); setDialog(null); setToast("연결을 안전하게 해제했습니다."); }}>연결 해제</button></div>
           </section>
@@ -1287,16 +1276,16 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       )}
       {dialog === "settings" && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setDialog(null)}>
-          <section className="modal compact" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
+          <section ref={modalRef} tabIndex={-1} className="modal compact" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
             <button className="modal-close" type="button" aria-label="닫기" onClick={() => setDialog(null)}>×</button>
-            <p className="eyebrow">DEVICE SECURITY</p><h2 id="settings-title">등록 기기 관리</h2>
-            <p>이 PC의 사용 환경을 선택하세요. 공용 PC 모드에서는 로그인 및 기기 정보와 투명도 등의 화면 설정을 이 브라우저에 남기지 않습니다.</p>
+            <p className="eyebrow">DEVICE SECURITY</p><h2 id="settings-title">설정</h2><h3>PC 사용 환경</h3>
+            <p>이 PC의 사용 환경을 선택하세요. 공용 PC 모드는 화면 설정을 저장하지 않습니다. 자리를 떠나기 전 ‘사용 종료’를 눌러 로그아웃해 주세요.</p>
             <div className="pc-mode-picker" role="group" aria-label="PC 사용 모드">
-              <button type="button" className={pcMode === "personal" ? "active" : ""} onClick={() => changePcMode("personal")}><strong>개인 PC</strong><small>화면 설정 기억</small></button>
-              <button type="button" className={pcMode === "public" ? "active" : ""} onClick={() => changePcMode("public")}><strong>공용 PC</strong><small>설정 저장 안 함</small></button>
+              <button type="button" aria-pressed={pcMode === "personal"} className={pcMode === "personal" ? "active" : ""} onClick={() => changePcMode("personal")}><strong>개인 PC</strong><small>화면 설정 기억</small></button>
+              <button type="button" aria-pressed={pcMode === "public"} className={pcMode === "public" ? "active" : ""} onClick={() => changePcMode("public")}><strong>공용 PC</strong><small>설정 저장 안 함</small></button>
             </div>
             {pcMode === "public" && <button className="public-session-end" type="button" onClick={() => void endPublicSession()}>공용 PC 사용 종료</button>}
-            <p>사용하지 않는 휴대폰을 등록 해제하면 해당 기기 토큰으로 더 이상 접속할 수 없습니다.</p>
+            <h3>등록 기기</h3><p>등록 해제한 휴대폰은 새 코드로 다시 등록해야 연결할 수 있습니다.</p>
             <div className="registered-device-list">
               {devices.length ? devices.map((device) => (
                 <div className="registered-device" key={device.id}>
@@ -1306,9 +1295,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 </div>
               )) : <div className="empty-device-list">등록된 기기가 없습니다.</div>}
             </div>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.3-fixed-release.apk" download>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.5-rotation-fixed-release.apk" download>
               <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote v0.4.3 받기</strong>
+              <strong>Galaxy Remote v0.4.5 받기</strong>
               <small>v0.4.0·v0.4.1 위에 바로 설치할 수 있습니다.</small>
             </a>
           </section>
