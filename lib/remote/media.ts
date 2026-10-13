@@ -19,32 +19,56 @@ export class ScreenRecording {
   private recorder: MediaRecorder | null = null;
   private parts: Blob[] = [];
   private bytes = 0;
-  private onDone: (message: string) => void;
-  constructor(onDone: (message: string) => void) { this.onDone = onDone; }
-  start(stream: MediaStream) {
-    if (this.recorder || !stream.getVideoTracks().some(t => t.readyState === "live")) throw new Error("녹화할 화면이 없습니다.");
+  private queuedBytes = 0;
+  private writer: FileSystemWritableFileStream | null = null;
+  private writes = Promise.resolve();
+  private starting = false;
+  private failed = false;
+  private cancelled = false;
+  constructor(private onDone: (message: string) => void) {}
+  async start(stream: MediaStream) {
+    if (this.recorder || this.starting || !stream.getVideoTracks().some(t => t.readyState === "live")) throw new Error("녹화할 화면이 없습니다.");
     if (typeof MediaRecorder === "undefined") throw new Error("이 브라우저는 녹화를 지원하지 않습니다.");
     const mime = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find(m => MediaRecorder.isTypeSupported(m));
     if (!mime) throw new Error("지원되는 녹화 형식이 없습니다.");
-    this.parts = []; this.bytes = 0;
-    const recorder = new MediaRecorder(stream, { mimeType: mime });
-    this.recorder = recorder;
-    recorder.ondataavailable = e => {
-      if (e.data.size) { this.parts.push(e.data); this.bytes += e.data.size; }
-      // Bounded fallback on browsers without a streaming file writer. Stop,
-      // retain the playable segment, and let the user start the next segment.
-      if (this.bytes >= 128 * 1024 * 1024 && recorder.state === "recording") recorder.stop();
-    };
-    recorder.onerror = () => { this.stop(); };
-    recorder.onstop = () => {
-      this.recorder = null;
-      if (this.parts.length) downloadBlob(new Blob(this.parts, { type: mime }), `GalaxyRemote-${timestamp()}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}`);
-      this.parts = [];
-      this.onDone(this.bytes >= 128 * 1024 * 1024 ? "128MiB에 도달해 녹화를 저장했습니다. 새 녹화를 시작할 수 있어요." : "녹화 파일을 저장했습니다.");
-    };
-    recorder.start(1000);
+    this.starting = true; this.cancelled = false;
+    const name = `GalaxyRemote-${timestamp()}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}`;
+    try {
+      const picker = (window as Window & { showSaveFilePicker?: (options: { suggestedName: string }) => Promise<{ createWritable(): Promise<FileSystemWritableFileStream> }> }).showSaveFilePicker;
+      if (picker) this.writer = await (await picker.call(window, { suggestedName: name })).createWritable();
+      if (this.cancelled || !stream.getVideoTracks().some(t => t.readyState === "live")) { await this.writer?.abort(); this.writer = null; return false; }
+      this.parts = []; this.bytes = 0; this.queuedBytes = 0; this.failed = false; this.writes = Promise.resolve();
+      const recorder = new MediaRecorder(stream, { mimeType: mime });
+      this.recorder = recorder;
+      recorder.ondataavailable = e => {
+        if (!e.data.size) return;
+        this.bytes += e.data.size;
+        if (this.writer) {
+          const writer = this.writer; this.queuedBytes += e.data.size;
+          if (this.queuedBytes > 4 * 1024 * 1024 && recorder.state === "recording") recorder.pause();
+          this.writes = this.writes.then(() => writer.write(e.data)).then(() => {
+            this.queuedBytes -= e.data.size;
+            if (this.queuedBytes < 2 * 1024 * 1024 && recorder.state === "paused") recorder.resume();
+          }).catch(() => { this.failed = true; this.stop(); });
+        } else {
+          this.parts.push(e.data);
+          if (this.bytes >= 128 * 1024 * 1024 && recorder.state === "recording") recorder.stop();
+        }
+      };
+      recorder.onerror = () => { this.failed = true; this.stop(); };
+      recorder.onstop = () => {
+        const writer = this.writer;
+        void this.writes.then(async () => {
+          if (writer) await writer.close();
+          else if (this.parts.length) downloadBlob(new Blob(this.parts, { type: mime }), name);
+          this.onDone(this.failed ? "녹화 오류로 종료했습니다. 저장된 부분 파일을 확인해 주세요." : !writer && this.bytes >= 128 * 1024 * 1024 ? "128MiB에 도달해 녹화를 저장했습니다. 새 녹화를 시작할 수 있어요." : "녹화 파일을 저장했습니다.");
+        }).catch(() => this.onDone("녹화 파일을 마무리하지 못했습니다. 저장 파일을 확인해 주세요.")).finally(() => { this.recorder = null; this.writer = null; this.parts = []; });
+      };
+      recorder.start(1000); return true;
+    } catch (error) { await this.writer?.abort().catch(() => {}); this.writer = null; throw error; }
+    finally { this.starting = false; }
   }
-  stop() { if (this.recorder && this.recorder.state !== "inactive") this.recorder.stop(); }
+  stop() { this.cancelled = true; if (this.recorder && this.recorder.state !== "inactive") this.recorder.stop(); }
 }
 // AudioPlaybackCapture fallback over a separate, unreliable WebRTC channel.
 // Queue at most 150ms, drop stale samples rather than accumulating latency.

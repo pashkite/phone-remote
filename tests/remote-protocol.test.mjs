@@ -77,3 +77,21 @@ test('command timeout reports uncertainty instead of successful execution',async
  channel.message({type:'capabilities',v:1,features:['commandAck']});client.send({type:'global',action:'lock'});
  t.mock.timers.tick(6001);assert.match(state.result,/시간 초과/);assert.doesNotMatch(state.result,/완료/);client.close();
 });
+test('recording streams chunks to the chosen file and finalizes on disconnect',async t=>{
+ const {ScreenRecording}=await import(pathToFileURL(path.join(tmp,'media.mjs')));
+ const oldRecorder=globalThis.MediaRecorder,oldWindow=globalThis.window;t.after(()=>{globalThis.MediaRecorder=oldRecorder;globalThis.window=oldWindow;});
+ let recorder,closed=false;const parts=[];let message='';
+ globalThis.window={showSaveFilePicker:async()=>({createWritable:async()=>({write:async data=>parts.push(await data.text()),close:async()=>{closed=true;},abort:async()=>{}})})};
+ globalThis.MediaRecorder=class {static isTypeSupported(){return true;}state='inactive';constructor(){recorder=this;}start(){this.state='recording';}stop(){this.state='inactive';this.onstop?.();}pause(){this.state='paused';}resume(){this.state='recording';}};
+ const recording=new ScreenRecording(m=>message=m);await recording.start({getVideoTracks:()=>[{readyState:'live'}]});
+ recorder.ondataavailable({data:new Blob(['first'])});recorder.ondataavailable({data:new Blob(['last'])});recording.stop();await tick();
+ assert.deepEqual(parts,['first','last']);assert.equal(closed,true);assert.match(message,/저장했습니다/);
+});
+test('recording write failures never report a successful save',async t=>{
+ const {ScreenRecording}=await import(pathToFileURL(path.join(tmp,'media.mjs')));
+ const oldRecorder=globalThis.MediaRecorder,oldWindow=globalThis.window;t.after(()=>{globalThis.MediaRecorder=oldRecorder;globalThis.window=oldWindow;});
+ let recorder,message='';globalThis.window={showSaveFilePicker:async()=>({createWritable:async()=>({write:async()=>{throw new Error('disk full');},close:async()=>{},abort:async()=>{}})})};
+ globalThis.MediaRecorder=class {static isTypeSupported(){return true;}state='inactive';constructor(){recorder=this;}start(){this.state='recording';}stop(){this.state='inactive';this.onstop?.();}pause(){this.state='paused';}resume(){this.state='recording';}};
+ const recording=new ScreenRecording(m=>message=m);await recording.start({getVideoTracks:()=>[{readyState:'live'}]});recorder.ondataavailable({data:new Blob(['partial'])});await tick();
+ assert.match(message,/오류/);assert.doesNotMatch(message,/저장했습니다/);
+});

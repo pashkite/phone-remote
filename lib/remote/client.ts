@@ -75,10 +75,10 @@ export class RemoteClient {
   }
   async copyClipboard() { await navigator.clipboard.writeText(this.state.clipboard); }
   capture() { return screenshot(this.video()); }
-  startRecording() {
+  async startRecording() {
     const stream = this.stream(); if (!stream) throw new Error("연결 후 녹화해 주세요.");
     const tracks = [...stream.getVideoTracks(), ...(this.state.audio ? this.player.destination?.stream.getAudioTracks() ?? [] : [])];
-    this.recording.start(new MediaStream(tracks)); this.update({ recording: true, recordingAt: Date.now() });
+    if (await this.recording.start(new MediaStream(tracks))) this.update({ recording: true, recordingAt: Date.now() });
   }
   stopRecording() { this.recording.stop(); }
   async toggleAudio() {
