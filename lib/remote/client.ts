@@ -4,22 +4,24 @@ import { MAX_CLIPBOARD_BYTES, PROTOCOL_VERSION, type CommandStatus } from "./pro
 import { PcmPlayer, ScreenRecording, downloadBlob, screenshot, timestamp } from "./media";
 export type ToolsState = { features: string[]; result: string; clipboard: string; offer: FileOffer | null; fileStatus: string; recording: boolean; recordingAt: number; audio: boolean; audioStatus: string };
 export class RemoteClient {
-  readonly diagnostics = new Diagnostics();
+  readonly diagnostics: Diagnostics;
   readonly id = crypto.randomUUID();
   private pending = new Map<string, { timer: ReturnType<typeof setTimeout>; type: string }>();
   private sequence = 0;
+  private helloSent = false;
   private listeners = new Set<(state: ToolsState) => void>();
   private state: ToolsState = { features: [], result: "구버전 앱은 처리 결과를 확인할 수 없습니다.", clipboard: "", offer: null, fileStatus: "", recording: false, recordingAt: 0, audio: false, audioStatus: "꺼짐" };
   private player = new PcmPlayer();
   private recording = new ScreenRecording(message => { this.update({ recording: false, result: message }); });
   private fileTransfer: FileTransfer | null = null;
   get files(): FileTransfer { if (!this.fileTransfer) throw new Error("파일 전송을 지원하는 앱이 필요합니다."); return this.fileTransfer; }
-  constructor(private channel: RTCDataChannel, private peer: RTCPeerConnection, private video: () => HTMLVideoElement | null, private stream: () => MediaStream | null) {
+  constructor(private channel: RTCDataChannel, private peer: RTCPeerConnection, private video: () => HTMLVideoElement | null, private stream: () => MediaStream | null, diagnostics?: Diagnostics) {
+    this.diagnostics = diagnostics ?? new Diagnostics();
     channel.onmessage = event => this.receive(String(event.data));
   }
   subscribe(listener: (state: ToolsState) => void) { this.listeners.add(listener); listener(this.state); return () => { this.listeners.delete(listener); }; }
   private update(value: Partial<ToolsState>) { if (Object.entries(value).every(([k,v]) => this.state[k as keyof ToolsState] === v)) return; this.state = { ...this.state, ...value }; this.listeners.forEach(l => l(this.state)); }
-  opened() { this.raw({ type: "hello", v: PROTOCOL_VERSION, features: ["commandAck", "clipboard", "files", "pcmAudio", "diagnostics"] }); this.diagnostics.record("channel", { state: "open" }); }
+  opened() { this.diagnostics.record("channel", { state: "open" }); }
   private raw(payload: Record<string, unknown>) { if (this.channel.readyState !== "open" || this.channel.bufferedAmount > 262144) return false; try { this.channel.send(JSON.stringify(payload)); return true; } catch { return false; } }
   send(payload: Record<string, unknown>) {
     if (!this.state.features.includes("commandAck")) return this.raw(payload);
@@ -42,6 +44,7 @@ export class RemoteClient {
     try {
       const m = JSON.parse(text);
       if (m.type === "capabilities" && m.v === PROTOCOL_VERSION && Array.isArray(m.features)) {
+        if (!this.helloSent) { this.helloSent = true; this.raw({ type: "hello", v: 1, features: ["commandAck", "clipboard", "files", "pcmAudio", "diagnostics"] }); }
         // Old Android builds treat any arriving DataChannel as control. Only
         // open extension channels after the peer explicitly supports them.
         if (!this.fileTransfer && m.features.includes("files")) {

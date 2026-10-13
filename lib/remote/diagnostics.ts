@@ -10,5 +10,5 @@ export class Diagnostics {
     this.events.push({ at: new Date().toISOString(), event: event.replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 60), data: clean });
     this.events = this.events.filter(item => Date.now() - Date.parse(item.at) < 24 * 60 * 60 * 1000).slice(-500);
   }
-  export() { return JSON.stringify({ format: 1, platform: "web", events: this.events }, null, 2); }
+  export() { this.events = this.events.filter(item => Date.now() - Date.parse(item.at) < 86400000); return JSON.stringify({ format: 1, platform: "web", events: this.events }, null, 2); }
 }

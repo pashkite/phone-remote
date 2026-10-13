@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { normalizedVideoPoint } from "./remote-geometry";
 import RemoteTools from "./components/remote-tools";
 import { RemoteClient } from "../lib/remote/client";
+import { Diagnostics } from "../lib/remote/diagnostics";
 
 type ConnectionState = "offline" | "waiting" | "reconnecting" | "connected";
 type PcMode = "personal" | "public";
@@ -105,6 +106,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     packetLoss: null,
     path: null,
   });
+  const [diagnostics] = useState(() => new Diagnostics());
   const [toast, setToast] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [connectionHint, setConnectionHint] = useState<string | null>(null);
@@ -274,6 +276,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }, []);
 
   const closeConnection = useCallback(async (notifyServer = true, intentional = true) => {
+    diagnostics.record("connection", { state: "closed" });
     intentionalCloseRef.current = intentional;
     if (intentional && reconnectTimerRef.current) {
       window.clearTimeout(reconnectTimerRef.current);
@@ -323,7 +326,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         // best-effort server cleanup cannot reach the network.
       });
     }
-  }, [stopTimers]);
+  }, [stopTimers, diagnostics]);
 
   useEffect(() => () => { void closeConnection(false, true); }, [closeConnection]);
 
@@ -632,7 +635,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
       const channel = peer.createDataChannel("control", { ordered: true });
       channelRef.current = channel;
-      const tools = new RemoteClient(channel, peer, () => videoRef.current, () => remoteStreamRef.current);
+      const tools = new RemoteClient(channel, peer, () => videoRef.current, () => remoteStreamRef.current, diagnostics);
       toolsRef.current = tools;
       setToolsClient(tools);
       channel.onopen = () => {
@@ -1209,7 +1212,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             </div>
           </section>
 
-          <RemoteTools key={toolsClient?.id ?? "offline"} client={toolsClient} />
+          <RemoteTools key={toolsClient?.id ?? "offline"} client={toolsClient} diagnostics={diagnostics} />
 
           <section className="control-card volume-card">
             <div className="volume-label"><strong>볼륨 설정</strong><span aria-hidden="true">◖))</span></div>

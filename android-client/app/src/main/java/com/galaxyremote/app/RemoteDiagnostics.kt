@@ -21,7 +21,10 @@ object RemoteDiagnostics {
         events.put(JSONObject().put("at", System.currentTimeMillis()).put("event", event.replace(Regex("[^a-zA-Z0-9_.-]"), "").take(60)).put("data", data))
         prefs.edit().putString("events", events.toString()).apply()
     }
-    fun export(context: Context): String = JSONObject().put("format", 1).put("platform", "android")
+    fun export(context: Context): String {
+        record(context, "diagnostics_export")
+        return JSONObject().put("format", 1).put("platform", "android")
         .put("appVersion", BuildConfig.VERSION_NAME)
         .put("events", JSONArray(context.getSharedPreferences("remote_diagnostics", Context.MODE_PRIVATE).getString("events", "[]"))).toString(2)
+    }
 }

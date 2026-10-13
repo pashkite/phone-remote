@@ -190,7 +190,7 @@ class WebRtcSession(
         videoSender?.let { sender ->
             val parameters = sender.parameters
             parameters.encodings.forEach { it.maxBitrateBps = bitrateFor(safeShortEdge, safeFps) }
-            sender.setParameters(parameters)
+            if (!sender.setParameters(parameters)) throw IllegalStateException("영상 전송 설정이 거절됐습니다.")
         }
         return "${width}×${height} · ${safeFps}fps"
     }
@@ -360,6 +360,7 @@ class WebRtcSession(
                 } catch (_: Exception) { RemoteDiagnostics.record(context, "protocol", mapOf("code" to "INVALID_MESSAGE")) }
             }
         })
+        if (channel.state() == DataChannel.State.OPEN) capabilities()
     }
 
     private fun parseIceServers(payload: JSONArray): List<PeerConnection.IceServer> {
