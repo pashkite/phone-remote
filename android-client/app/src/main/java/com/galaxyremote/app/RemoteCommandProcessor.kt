@@ -10,7 +10,7 @@ class RemoteCommandProcessor(
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val results = linkedMapOf<String, JSONObject>()
-    private var active = true
+    @Volatile private var active = true
     private var highestSequence = 0L
     fun receive(command: JSONObject) {
         main.post {
@@ -46,5 +46,5 @@ class RemoteCommandProcessor(
             } catch (_: Exception) { finished = true; main.removeCallbacks(timeout); ack("failed", "ANDROID_ERROR") }
         }
     }
-    fun close() { active = false; main.removeCallbacksAndMessages(null); results.clear() }
+    fun close() { active = false; main.removeCallbacksAndMessages(null); main.post { results.clear() } }
 }

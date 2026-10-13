@@ -571,6 +571,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
       const { sessionId } = (await sessionResponse.json()) as { sessionId: string };
       const { iceServers } = (await iceResponse.json()) as { iceServers: RTCIceServer[] };
+      diagnostics.record("connection_request", { state: "created" });
       sessionIdRef.current = sessionId;
 
       const peer = new RTCPeerConnection({
@@ -689,6 +690,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           };
           const state = payload.session?.state ?? "";
           if (state !== lastState) {
+            diagnostics.record("connection_request", { state });
             lastState = state;
             if (state === "consent_pending") {
               setConnectionHint("휴대폰의 Android 화면 공유 확인창을 승인해 주세요.");

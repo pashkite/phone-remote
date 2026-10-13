@@ -123,6 +123,7 @@ class ConnectionListenerService : Service() {
         val expiresAt = session.optLong("expiresAt", 0L)
         if (sessionId.isBlank() || expiresAt <= System.currentTimeMillis()) return
         if (sessionId == currentRequestId) return
+        RemoteDiagnostics.record(this, "connection_request", mapOf("state" to "received"))
         currentRequestId = sessionId
         if (RemoteControlService.isProjectionReady()) {
             connectTrustedRequest(sessionId)

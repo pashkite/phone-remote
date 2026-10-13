@@ -26,11 +26,13 @@ Android: `RemoteCommandProcessor.kt`, `RemoteFileTransfer.kt`, `PlaybackAudioCap
 - `npx wrangler types worker-configuration.d.ts --config dist/server/wrangler.json`, then `npx tsc --noEmit`: passed.
 - `npm run lint`: passed.
 - `node --test tests/*.test.mjs`: 22 passed, including original geometry/detached-window regressions, authorization rendering, chunk encoding, corrupt/out-of-order/oversized transfer rejection, byte-identical approved transfers, queue progression, timeouts, legacy-channel negotiation and diagnostic filtering.
-- Android CI compiles Debug and unsigned Release packages. Its initial run failed before compilation because setup-android requested the retired `tools` package; the workflow now requests actual platform/build-tools packages.
+- Android CI successfully compiled Debug and unsigned Release packages. The first emulator run failed before instrumentation because its disposable runner had insufficient disk for Android 16 userdata; unused preinstalled build tools are now removed before boot and APK artifacts upload before emulator testing. Its initial run failed before compilation because setup-android requested the retired `tools` package; the workflow now requests actual platform/build-tools packages.
 - Physical Galaxy S26 Ultra, battery A/B comparison, TURN, real clipboard policies, playback audio, rotation under live control, provider failures and long recordings are NOT verified in this workspace.
 - Managed browser QA is unavailable in this environment. No actual browser WebRTC session is claimed.
 
 ## Signing and deployment
+
+Web publication succeeded as Site version 37, deployment `appgdep_6ace275eb8c08191bb6a5ee6c7b8698c`, https://galaxy-remote-control.ashkite.chatgpt.site . A subsequent diagnostic-only update will receive its own saved version.
 
 The existing release key is not accessible in this workspace. Keep the existing v0.4.5 download in place. Do not install a debug/new-key build over the existing app or uninstall the existing app to try it. To produce a compatible update, sign the compiled Release APK with the original release key and verify its certificate fingerprint against the installed/previous APK, then test in-place upgrade with registration and preferences retained. Only after that should the APK download link change.
 

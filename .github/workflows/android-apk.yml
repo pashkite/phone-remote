@@ -10,6 +10,7 @@ on:
 jobs:
   build-and-device-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -30,38 +31,6 @@ jobs:
         working-directory: android-client
         run: gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:bundleRelease --stacktrace
 
-      - name: Enable KVM group permissions
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Android 16 screen-projection smoke test
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 36
-          target: google_apis
-          arch: x86_64
-          profile: pixel_7_pro
-          working-directory: android-client
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: >-
-            bash -c 'adb logcat -c; test_status=0; gradle :app:connectedDebugAndroidTest --stacktrace || test_status=$?; adb logcat -d -b all -v threadtime > android16-logcat.txt 2>&1 || true; adb shell dumpsys activity exit-info com.galaxyremote.app > android16-exit-info.txt 2>&1 || true; adb shell dumpsys dropbox --print data_app_crash > android16-app-crashes.txt 2>&1 || true; exit "$test_status"'
-
-      - name: Upload device-test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: galaxy-remote-android16-test-reports
-          path: |
-            android-client/app/build/reports/androidTests/connected/
-            android-client/app/build/outputs/androidTest-results/connected/
-            android-client/android16-logcat.txt
-            android-client/android16-exit-info.txt
-            android-client/android16-app-crashes.txt
-          if-no-files-found: ignore
-          retention-days: 7
-
       - name: Collect Android signing tools
         shell: bash
         run: |
@@ -81,3 +50,43 @@ jobs:
             android-signing-tools/
           if-no-files-found: error
           retention-days: 1
+
+      - name: Free disposable runner space for Android 16 emulator
+        shell: bash
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
+          df -h /
+
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Android 16 screen-projection smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          working-directory: android-client
+          emulator-boot-timeout: 300
+          emulator-options: -memory 2048 -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: >-
+            bash -c 'adb logcat -c; test_status=0; gradle :app:connectedDebugAndroidTest --stacktrace || test_status=$?; adb logcat -d -b all -v threadtime > android16-logcat.txt 2>&1 || true; adb shell dumpsys activity exit-info com.galaxyremote.app > android16-exit-info.txt 2>&1 || true; adb shell dumpsys dropbox --print data_app_crash > android16-app-crashes.txt 2>&1 || true; exit "$test_status"'
+
+      - name: Upload device-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galaxy-remote-android16-test-reports
+          path: |
+            android-client/app/build/reports/androidTests/connected/
+            android-client/app/build/outputs/androidTest-results/connected/
+            android-client/android16-logcat.txt
+            android-client/android16-exit-info.txt
+            android-client/android16-app-crashes.txt
+          if-no-files-found: ignore
+          retention-days: 7
+

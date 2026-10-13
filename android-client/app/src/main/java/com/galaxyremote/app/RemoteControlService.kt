@@ -157,6 +157,7 @@ class RemoteControlService : Service() {
     }
 
     private fun approveAndStartSession() {
+        RemoteDiagnostics.record(this, "connection_request", mapOf("state" to "approved"))
         val credentials = preferences.credentials ?: return
         val sessionId = currentSessionId ?: return
         val response = try {
