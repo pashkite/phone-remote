@@ -33,9 +33,9 @@ Android: `RemoteCommandProcessor.kt`, `RemoteFileTransfer.kt`, `PlaybackAudioCap
 
 ## Signing and deployment
 
-Web publication succeeded as Site version 37, deployment `appgdep_6ace275eb8c08191bb6a5ee6c7b8698c`, https://galaxy-remote-control.ashkite.chatgpt.site . A subsequent diagnostic-only update will receive its own saved version.
+Final web publication succeeded as Site version 38, deployment `appgdep_6ace2be4bde481918886d4732635f052`, https://galaxy-remote-control.ashkite.chatgpt.site . GitHub implementation PR #1 was merged as `4f5d66a51b5556674573e033f310592c5e626c32`.
 
-The existing release key is not accessible in this workspace. Keep the existing v0.4.5 download in place. Do not install a debug/new-key build over the existing app or uninstall the existing app to try it. To produce a compatible update, sign the compiled Release APK with the original release key and verify its certificate fingerprint against the installed/previous APK, then test in-place upgrade with registration and preferences retained. Only after that should the APK download link change.
+The matching release key is not accessible. Two historical saved keystore backups were recovered and examined; both their certificates and their private keys' public-key identities differ from the currently distributed v0.4.3-fixed and v0.4.5 APKs. Neither backup was used to sign an update. Keep the existing v0.4.5 download in place. Do not install a debug/new-key build over the existing app or uninstall the existing app to try it. To produce a compatible update, sign the compiled Release APK with the original release key and verify its certificate fingerprint against the installed/previous APK, then test in-place upgrade with registration and preferences retained. Only after that should the APK download link change.
 
 Preserved v0.4.5 APK SHA-256: `9f72a3ac3e6be2ee70d0e004387f6150850c34057c5e0e190107934c5ffce721`.
 
@@ -48,3 +48,5 @@ Site source baseline: `fa55666013398a3adeaa5f776b8be899bd58f191` (saved version 
 Use the original signing key; install the update over v0.4.5; check retained registration; exercise each permission refusal, gesture cancellation, input target loss, app reboot, rotation, lock, Wi-Fi/mobile transition, TURN transfer (empty and 100MiB files), queue/cancel/hash mismatch, disconnection during capture/recording/transfer, registration revocation and session replacement. Measure old/new standby drain under equal brightness, network, charging and automatic-connect settings. Do not label these passed until they are observed.
 
 Primary references: https://developer.android.com/media/grow/media-projection ; https://developer.android.com/media/platform/av-capture ; https://developer.android.com/about/versions/10/privacy/changes#clipboard-data ; installed WebRTC 144.7559.09 API inspected in the existing APK and compiled Android source.
+
+Current published APK signing certificate SHA-256: `148c6e2701937b6e3f319569bb31b36311bfd44ed05898c6ba802ec8389d1941`. Historical backup certificate SHA-256 values: `1eed685881c1e0e77d678ef0c8d025ba8bae466c4dd341c823b2c45d64e1b90e` and `e3e37ea27d6b8669b9b736ee8640b312c66e793cd4d4ca7d9f4955b3087e9e96`. Private-key public identifiers were also checked and do not match, so certificate replacement would not recover the current signing identity. Existing v0.4.5 APK signature verified; compiled new ARM64 library LOAD segments are aligned for 16KiB pages. In-place installation/registration retention is not verified and no newly signed installation package was issued.
