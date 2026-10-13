@@ -78,7 +78,7 @@ class RemoteAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun tap(normalizedX: Double, normalizedY: Double): Boolean {
+    private fun tap(normalizedX: Double, normalizedY: Double, callback: GestureResultCallback? = null): Boolean {
         val (width, height) = screenSize()
         val x = normalizedX.coerceIn(0.0, 1.0).toFloat() * width
         val y = normalizedY.coerceIn(0.0, 1.0).toFloat() * height
@@ -86,10 +86,10 @@ class RemoteAccessibilityService : AccessibilityService() {
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, 60))
             .build()
-        return dispatchGesture(gesture, null, null)
+        return dispatchGesture(gesture, callback, mainHandler)
     }
 
-    private fun longPress(normalizedX: Double, normalizedY: Double, durationMs: Long): Boolean {
+    private fun longPress(normalizedX: Double, normalizedY: Double, durationMs: Long, callback: GestureResultCallback? = null): Boolean {
         val (width, height) = screenSize()
         val x = normalizedX.coerceIn(0.0, 1.0).toFloat() * width
         val y = normalizedY.coerceIn(0.0, 1.0).toFloat() * height
@@ -103,7 +103,7 @@ class RemoteAccessibilityService : AccessibilityService() {
                 ),
             )
             .build()
-        return dispatchGesture(gesture, null, null)
+        return dispatchGesture(gesture, callback, mainHandler)
     }
 
     private fun swipe(
@@ -112,6 +112,7 @@ class RemoteAccessibilityService : AccessibilityService() {
         normalizedToX: Double,
         normalizedToY: Double,
         durationMs: Long,
+        callback: GestureResultCallback? = null,
     ): Boolean {
         val (width, height) = screenSize()
         val path = Path().apply {
@@ -133,7 +134,7 @@ class RemoteAccessibilityService : AccessibilityService() {
                 ),
             )
             .build()
-        return dispatchGesture(gesture, null, null)
+        return dispatchGesture(gesture, callback, mainHandler)
     }
 
     private fun global(action: String): Boolean {
@@ -181,7 +182,9 @@ class RemoteAccessibilityService : AccessibilityService() {
     private fun replaceFocusedText(value: String, backspace: Boolean): Boolean {
         val focused = focusedInput() ?: return false
         if (!focused.isEditable) return false
-        val current = focused.text?.toString().orEmpty()
+        // Some apps expose their placeholder through `text` even though the
+        // field is empty. Never merge remote typing with that visual hint.
+        val current = editableText(focused)
         val rawStart = focused.textSelectionStart
         val rawEnd = focused.textSelectionEnd
         val start = if (rawStart in 0..current.length) rawStart else current.length
@@ -204,7 +207,7 @@ class RemoteAccessibilityService : AccessibilityService() {
     private fun deleteForward(): Boolean {
         val focused = focusedInput() ?: return false
         if (!focused.isEditable) return false
-        val current = focused.text?.toString().orEmpty()
+        val current = editableText(focused)
         val rawStart = focused.textSelectionStart
         val rawEnd = focused.textSelectionEnd
         val start = if (rawStart in 0..current.length) rawStart else current.length
@@ -218,6 +221,13 @@ class RemoteAccessibilityService : AccessibilityService() {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, next)
         }
         return focused.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+    }
+
+    private fun editableText(focused: AccessibilityNodeInfo): String {
+        val current = focused.text?.toString().orEmpty()
+        if (focused.isShowingHintText) return ""
+        val hint = focused.hintText?.toString().orEmpty()
+        return if (hint.isNotEmpty() && current == hint) "" else current
     }
 
     private fun screenSize(): Pair<Float, Float> {
@@ -237,6 +247,31 @@ class RemoteAccessibilityService : AccessibilityService() {
         private var instance: RemoteAccessibilityService? = null
 
         fun dispatch(command: JSONObject): Boolean = instance?.handle(command) ?: false
+        fun pasteClipboard(): Boolean = instance?.focusedInput()?.performAction(AccessibilityNodeInfo.ACTION_PASTE) ?: false
+
+        fun dispatchWithResult(command: JSONObject, finish: (Boolean, String?) -> Unit) {
+            val service = instance
+            if (service == null) { finish(false, "ACCESSIBILITY_DISABLED"); return }
+            if (!RemotePreferences(service).standbyActive) { finish(false, "SESSION_INACTIVE"); return }
+            val type = command.optString("type")
+            if (type in setOf("tap", "longPress", "swipe")) {
+                val keys = if (type == "swipe") listOf("fromX", "fromY", "toX", "toY") else listOf("x", "y")
+                if (keys.any { !command.optDouble(it).isFinite() || command.optDouble(it) !in 0.0..1.0 }) { finish(false, "INVALID_COORDINATES"); return }
+                val callback = object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) { finish(true, null) }
+                    override fun onCancelled(gestureDescription: GestureDescription?) { finish(false, "GESTURE_CANCELLED") }
+                }
+                val accepted = when (type) {
+                    "tap" -> service.tap(command.optDouble("x"), command.optDouble("y"), callback)
+                    "longPress" -> service.longPress(command.optDouble("x"), command.optDouble("y"), command.optLong("durationMs", 650L), callback)
+                    else -> service.swipe(command.optDouble("fromX"), command.optDouble("fromY"), command.optDouble("toX"), command.optDouble("toY"), command.optLong("durationMs", 300L), callback)
+                }
+                if (!accepted) finish(false, "GESTURE_REJECTED")
+            } else {
+                val success = service.handle(command)
+                finish(success, if (success) null else if (type in setOf("text", "key")) "INPUT_UNAVAILABLE" else "ACTION_UNSUPPORTED_OR_REJECTED")
+            }
+        }
 
         fun isEnabled(context: Context): Boolean {
             val manager = context.getSystemService(AccessibilityManager::class.java)

@@ -10,6 +10,7 @@ class GalaxyRemoteApplication : Application() {
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             try {
+                RemoteDiagnostics.record(this, "crash", mapOf("code" to error.javaClass.simpleName))
                 RemotePreferences(this).recordRuntimeError(
                     RemotePreferences.runtimeDiagnostic("앱 실행", error),
                 )
