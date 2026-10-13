@@ -4,7 +4,7 @@ import test from "node:test";
 const developmentPreviewMeta =
   /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
 
-test("renders development preview metadata", async () => {
+test("renders production console without temporary preview metadata", async () => {
   const ownerEmail = process.env.OWNER_EMAIL?.trim() || "preview@local.test";
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
@@ -33,5 +33,8 @@ test("renders development preview metadata", async () => {
     response.headers.get("content-type") ?? "",
     /^text\/html\b/i,
   );
-  assert.match(await response.text(), developmentPreviewMeta);
+  const html = await response.text();
+  assert.doesNotMatch(html, developmentPreviewMeta);
+  assert.match(html, /Galaxy Remote/);
+  assert.match(html, /PNG 캡처/);
 });

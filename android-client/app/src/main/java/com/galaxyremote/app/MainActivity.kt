@@ -48,8 +48,8 @@ class MainActivity : AppCompatActivity() {
     private var runtimeErrorDialogShowing = false
     private var incomingManager: RemoteFileTransfer? = null
     private var incomingId: String? = null
-    private val sendFilePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) RemoteFileTransfer.current?.sendFile(uri)
+    private val sendFilePicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) RemoteFileTransfer.current?.queueFiles(uris)
     }
     private val receiveFilePicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val manager = incomingManager

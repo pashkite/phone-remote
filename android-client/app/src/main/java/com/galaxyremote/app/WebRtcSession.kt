@@ -140,7 +140,7 @@ class WebRtcSession(
             rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
         }
         preferences.markNativeStage("answer-peer-create")
-        val peer = factory.createPeerConnection(configuration, PeerObserver())
+        val peer = factory.createPeerConnection(configuration, PeerObserver(sessionId))
             ?: throw IllegalStateException("WebRTC 연결을 만들지 못했습니다.")
         peerConnection = peer
         videoTrack.setEnabled(true)
@@ -233,6 +233,7 @@ class WebRtcSession(
 
     @Synchronized
     fun closePeer() {
+        pendingSessionId = null
         commands?.close(); commands = null
         files?.close(); files = null
         audio.close()
@@ -332,7 +333,7 @@ class WebRtcSession(
         commands = RemoteCommandProcessor(
             send = { value ->
                 sendJson(value)
-                RemoteDiagnostics.record(context, "command", mapOf("status" to value.optString("status"), "code" to value.optString("code")))
+                if (value.optString("status") in setOf("completed", "failed")) RemoteDiagnostics.record(context, "command", mapOf("status" to value.optString("status"), "code" to value.optString("code")))
             },
             handle = { command, finish ->
                 if (onControlResult != null) onControlResult.invoke(command, finish)
@@ -413,10 +414,12 @@ class WebRtcSession(
         return if (fps == 60) (base * 1.7).toInt() else base
     }
 
-    private inner class PeerObserver : PeerConnection.Observer {
+    private inner class PeerObserver(private val observerSessionId: String) : PeerConnection.Observer {
         override fun onSignalingChange(newState: PeerConnection.SignalingState?) = Unit
 
         override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {
+            if (pendingSessionId != observerSessionId) return
+            RemoteDiagnostics.record(context, "ice", mapOf("state" to (newState?.name ?: "UNKNOWN")))
             when (newState) {
                 PeerConnection.IceConnectionState.CONNECTED,
                 PeerConnection.IceConnectionState.COMPLETED,
@@ -431,6 +434,8 @@ class WebRtcSession(
         override fun onStandardizedIceConnectionChange(newState: PeerConnection.IceConnectionState?) = Unit
 
         override fun onConnectionChange(newState: PeerConnection.PeerConnectionState?) {
+            if (pendingSessionId != observerSessionId) return
+            RemoteDiagnostics.record(context, "peer", mapOf("state" to (newState?.name ?: "UNKNOWN")))
             when (newState) {
                 PeerConnection.PeerConnectionState.CONNECTED ->
                     {
@@ -450,6 +455,7 @@ class WebRtcSession(
 
         override fun onIceCandidate(candidate: IceCandidate?) {
             val sessionId = pendingSessionId ?: return
+            if (sessionId != observerSessionId) return
             candidate ?: return
             onLocalCandidate(
                 sessionId,
@@ -463,7 +469,7 @@ class WebRtcSession(
         override fun onAddStream(stream: MediaStream?) = Unit
         override fun onRemoveStream(stream: MediaStream?) = Unit
         override fun onDataChannel(channel: DataChannel?) {
-            if (channel != null) registerDataChannel(channel)
+            if (channel != null && pendingSessionId == observerSessionId) registerDataChannel(channel) else channel?.close()
         }
         override fun onRenegotiationNeeded() = Unit
         override fun onAddTrack(receiver: RtpReceiver?, mediaStreams: Array<out MediaStream>?) = Unit

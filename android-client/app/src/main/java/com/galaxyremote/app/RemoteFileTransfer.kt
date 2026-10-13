@@ -30,6 +30,9 @@ class RemoteFileTransfer(private val context: Context, private val channel: Data
     private var digest = MessageDigest.getInstance("SHA-256")
     private var outgoing: File? = null
     private var outgoingOffer: Offer? = null
+    private val queued = java.util.ArrayDeque<Uri>()
+    private var pumping = false
+    private val pendingMessages = java.util.concurrent.atomic.AtomicInteger(0)
     private val timeout = Runnable { cancel() }
 
     init {
@@ -46,7 +49,8 @@ class RemoteFileTransfer(private val context: Context, private val channel: Data
                         if (m.optString("type") == "cancel" && m.optString("id") == sendingId) sendingId = null
                     } catch (_: Exception) { }
                 }
-                try { io.execute { if (!closed) try { if (buffer.binary) chunk(data) else message(JSONObject(String(data, Charsets.UTF_8))) } catch (_: Exception) { cancelInternal(true) } } } catch (_: Exception) { }
+                if (pendingMessages.incrementAndGet() > 64) { pendingMessages.decrementAndGet(); cancel(); return }
+                try { io.execute { try { if (!closed) { if (buffer.binary) chunk(data) else message(JSONObject(String(data, Charsets.UTF_8))) } } catch (_: Exception) { cancelInternal(true) } finally { pendingMessages.decrementAndGet() } } } catch (_: Exception) { pendingMessages.decrementAndGet() }
             }
         })
     }
@@ -63,9 +67,9 @@ class RemoteFileTransfer(private val context: Context, private val channel: Data
                 require(size in 0..MAX_SIZE && hash.matches(Regex("[a-f0-9]{64}")))
                 pendingOffer = Offer(id, safeName(m.getString("name")), size, hash); touch()
             }
-            "accept" -> if (outgoingOffer?.id == id && sendingId == id) pump()
+            "accept" -> if (outgoingOffer?.id == id && sendingId == id && !pumping) { pumping = true; pump() }
             "end" -> if (incoming?.id == id) finish()
-            "complete" -> if (outgoingOffer?.id == id) { cancelInternal(false); status("파일 전송 완료") }
+            "complete" -> if (outgoingOffer?.id == id) { cancelInternal(false, true); status("파일 전송 완료"); nextQueued() }
             "cancel" -> if (id == incoming?.id || id == pendingOffer?.id || id == outgoingOffer?.id) cancelInternal(false)
         }
     }
@@ -83,7 +87,17 @@ class RemoteFileTransfer(private val context: Context, private val channel: Data
             } catch (_: Exception) { cancelInternal(true) }
         }
     }
-    fun sendFile(uri: Uri) {
+    fun queueFiles(uris: List<Uri>) {
+        if (closed) return
+        io.execute {
+            if (queued.size + uris.size > 20) { status("파일 대기열은 최대 20개입니다."); return@execute }
+            queued.addAll(uris); nextQueued()
+        }
+    }
+    private fun nextQueued() {
+        if (!closed && outgoing == null && incoming == null && pendingOffer == null && queued.isNotEmpty()) prepareFile(queued.removeFirst())
+    }
+    private fun prepareFile(uri: Uri) {
         io.execute {
             if (closed || outgoing != null || pendingOffer != null || incoming != null) { status("현재 전송을 먼저 마쳐 주세요."); return@execute }
             try {
@@ -145,7 +159,9 @@ class RemoteFileTransfer(private val context: Context, private val channel: Data
     }
     fun cancel() { sendingId = null; try { io.execute { cancelInternal(true) } } catch (_: Exception) { } }
     private fun removeDestination() { destination?.let { try { android.provider.DocumentsContract.deleteDocument(context.contentResolver, it) } catch (_: Exception) { } }; destination = null }
-    private fun cancelInternal(notify: Boolean) {
+    private fun cancelInternal(notify: Boolean, keepQueue: Boolean = false) {
+        if (!keepQueue) queued.clear()
+        pumping = false
         val id = incoming?.id ?: pendingOffer?.id ?: outgoingOffer?.id
         if (notify && id != null) reply("cancel", id)
         main.removeCallbacks(timeout); sendingId = null; output?.close(); output = null; temp?.delete(); temp = null

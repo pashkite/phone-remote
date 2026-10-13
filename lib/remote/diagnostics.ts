@@ -4,6 +4,7 @@ export class Diagnostics {
   record(event: string, data: Record<string, unknown> = {}) {
     const clean: Record<string, string | number | boolean | null> = {};
     for (const [key, value] of Object.entries(data)) {
+      if (key === "path" && value !== "direct" && value !== "turn" && value !== null) continue;
       if (SAFE_KEYS.has(key) && (typeof value === "number" || typeof value === "boolean" || value === null || (typeof value === "string" && /^[a-zA-Z0-9_.-]{0,80}$/.test(value)))) clean[key] = value as string | number | boolean | null;
     }
     this.events.push({ at: new Date().toISOString(), event: event.replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 60), data: clean });

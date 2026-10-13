@@ -49,3 +49,6 @@ next-env.d.ts
 /android-client/maven-cache/
 /android-client/local.properties
 /android-client/app/build/
+
+/worker-configuration.d.ts
+/tsconfig.tsbuildinfo

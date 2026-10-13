@@ -1211,7 +1211,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             </div>
           </section>
 
-          <RemoteTools key={toolsClient ? sessionIdRef.current : "offline"} client={toolsClient} />
+          <RemoteTools key={toolsClient?.id ?? "offline"} client={toolsClient} />
 
           <section className="control-card volume-card">
             <div className="volume-label"><strong>볼륨 설정</strong><span aria-hidden="true">◖))</span></div>

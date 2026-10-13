@@ -308,6 +308,7 @@ class RemoteControlService : Service() {
             if (!response.optBoolean("active")) finishRemoteSession("서버에서 연결이 종료됐습니다.")
         } catch (error: ApiException) {
             if (error.statusCode == 401) shutdown("기기 등록이 해제됐습니다.")
+            else if (System.currentTimeMillis() - lastLeaseSuccess > 45000) finishRemoteSession("연결 권한 확인 시간이 초과됐습니다.")
         } catch (_: Exception) {
             if (System.currentTimeMillis() - lastLeaseSuccess > 45000) finishRemoteSession("연결 권한 확인 시간이 초과됐습니다.")
         }

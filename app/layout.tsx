@@ -15,9 +15,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Galaxy Remote",
   description: "내 갤럭시 화면을 웹에서 안전하게 보고 조작하는 개인 원격 콘솔",
-  other: {
-    "codex-preview": "development",
-  },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

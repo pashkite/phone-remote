@@ -5,6 +5,7 @@ import { PcmPlayer, ScreenRecording, downloadBlob, screenshot, timestamp } from 
 export type ToolsState = { features: string[]; result: string; clipboard: string; offer: FileOffer | null; fileStatus: string; recording: boolean; recordingAt: number; audio: boolean; audioStatus: string };
 export class RemoteClient {
   readonly diagnostics = new Diagnostics();
+  readonly id = crypto.randomUUID();
   private pending = new Map<string, { timer: ReturnType<typeof setTimeout>; type: string }>();
   private sequence = 0;
   private listeners = new Set<(state: ToolsState) => void>();
@@ -18,7 +19,7 @@ export class RemoteClient {
     channel.onmessage = event => this.receive(String(event.data));
   }
   subscribe(listener: (state: ToolsState) => void) { this.listeners.add(listener); listener(this.state); return () => { this.listeners.delete(listener); }; }
-  private update(value: Partial<ToolsState>) { this.state = { ...this.state, ...value }; this.listeners.forEach(l => l(this.state)); }
+  private update(value: Partial<ToolsState>) { if (Object.entries(value).every(([k,v]) => this.state[k as keyof ToolsState] === v)) return; this.state = { ...this.state, ...value }; this.listeners.forEach(l => l(this.state)); }
   opened() { this.raw({ type: "hello", v: PROTOCOL_VERSION, features: ["commandAck", "clipboard", "files", "pcmAudio", "diagnostics"] }); this.diagnostics.record("channel", { state: "open" }); }
   private raw(payload: Record<string, unknown>) { if (this.channel.readyState !== "open") return false; try { this.channel.send(JSON.stringify(payload)); return true; } catch { return false; } }
   send(payload: Record<string, unknown>) {
