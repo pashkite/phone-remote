@@ -11,6 +11,7 @@ export default function RemoteTools({ client }: { client: RemoteClient | null })
   async function run(action: () => unknown) { try { setError(""); await action(); } catch (e) { setError(e instanceof Error ? e.message : "작업 실패"); } }
   const supported = (feature: string) => !!state?.features.includes(feature);
   return <section className="control-card remote-tools"><h3>전송·저장 도구</h3>
+    {client && !state?.features.length && <p className="tools-note">현재 앱은 새 전송 기능을 지원하지 않습니다. 캡처·녹화는 바로 사용할 수 있어요.</p>}
     <p role="status">{state?.result ?? "연결하면 사용할 수 있어요."}</p>
     <div className="tools-buttons"><button disabled={!client} onClick={() => void run(() => client!.capture())}>PNG 캡처</button><button disabled={!client} onClick={() => void run(() => state?.recording ? client!.stopRecording() : client!.startRecording())}>{state?.recording ? `녹화 중지 (${seconds}초)` : "화면 녹화"}</button></div>
     <p className="tools-note">녹화는 PC에 저장됩니다. 128MiB마다 중지·저장되며 다시 시작할 수 있어요.</p>

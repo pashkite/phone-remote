@@ -632,9 +632,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
       const channel = peer.createDataChannel("control", { ordered: true });
       channelRef.current = channel;
-      const files = peer.createDataChannel("files", { ordered: true });
-      const audio = peer.createDataChannel("audio-pcm", { ordered: false, maxRetransmits: 0 });
-      const tools = new RemoteClient(channel, files, audio, () => videoRef.current, () => remoteStreamRef.current);
+      const tools = new RemoteClient(channel, peer, () => videoRef.current, () => remoteStreamRef.current);
       toolsRef.current = tools;
       setToolsClient(tools);
       channel.onopen = () => {

@@ -88,6 +88,7 @@ class ConnectionListenerService : Service() {
         val credentials = preferences.credentials ?: return
         val response = try {
             requests += 1
+            pollRequests = requests
             ApiClient(credentials).poll()
         } catch (error: ApiException) {
             failures = (failures + 1).coerceAtMost(4); nextPollMs = (4000L shl failures).coerceAtMost(30000L)
@@ -297,6 +298,9 @@ class ConnectionListenerService : Service() {
     }
 
     companion object {
+        @Volatile var pollRequests = 0
+            private set
+
         const val ACTION_START = "com.galaxyremote.app.action.LISTEN"
         const val ACTION_STOP = "com.galaxyremote.app.action.STOP_LISTENING"
         const val ACTION_REJECT = "com.galaxyremote.app.action.REJECT_SESSION"

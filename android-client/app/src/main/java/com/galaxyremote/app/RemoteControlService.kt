@@ -334,7 +334,7 @@ class RemoteControlService : Service() {
             }
             "diagnostics" -> {
                 val battery = getSystemService(android.os.BatteryManager::class.java).getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
-                webRtcSession?.sendJson(JSONObject().put("type", "diagnostic").put("data", JSONObject().put("battery", battery).put("mode", preferences.standbyMode).put("appVersion", BuildConfig.VERSION_NAME)))
+                webRtcSession?.sendJson(JSONObject().put("type", "diagnostic").put("data", JSONObject().put("battery", battery).put("mode", preferences.standbyMode).put("appVersion", BuildConfig.VERSION_NAME).put("requests", ConnectionListenerService.pollRequests).put("bytes", (android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid()).coerceAtLeast(0) + android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid()).coerceAtLeast(0)))))
                 finish(true, null)
             }
             "quality", "volume" -> { val success = handleControl(command); finish(success, if (success) null else "SESSION_INACTIVE") }

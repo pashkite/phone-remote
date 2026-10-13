@@ -32,10 +32,11 @@ test('diagnostics reject payloads, tokens, filenames and IPs',()=>{
  const output=logs.export();assert.equal(JSON.parse(output).events.length,500);assert.doesNotMatch(output,/secret|password|private|192\.168/);
 });
 test('old app uses original commands; new app gets IDs and increasing sequence; acknowledgements are tracked',()=>{
- const control=new Channel(), files=new Channel(), audio=new Channel();
- const client=new RemoteClient(control,files,audio,()=>null,()=>null);let snapshot;client.subscribe(s=>snapshot=s);
- client.send({type:'global',action:'home'});assert.deepEqual(JSON.parse(control.sent[0]),{type:'global',action:'home'});
- control.message({type:'capabilities',v:1,features:['commandAck']});
+ const control=new Channel();let opened=0;const peer={createDataChannel(){opened++;return new Channel();}};
+ const client=new RemoteClient(control,peer,()=>null,()=>null);let snapshot;client.subscribe(s=>snapshot=s);
+ client.send({type:'global',action:'home'});assert.equal(opened,0);assert.deepEqual(JSON.parse(control.sent[0]),{type:'global',action:'home'});
+ control.message({type:'capabilities',v:1,features:['commandAck','files','pcmAudio']});assert.equal(opened,2);
+ control.message({type:'capabilities',v:1,features:['commandAck','files','pcmAudio']});assert.equal(opened,2);
  client.send({type:'text',value:'한글🙂\nabc'});const m=JSON.parse(control.sent.at(-1));assert.equal(m.v,1);assert.equal(m.seq,1);assert.match(m.id,/^[a-f0-9-]{36}$/);
  control.message({type:'ack',v:1,id:m.id,status:'received'});assert.match(snapshot.result,/수신/);
  control.message({type:'ack',v:1,id:m.id,status:'completed'});assert.match(snapshot.result,/처리 완료/);
@@ -53,4 +54,26 @@ test('oversized offers, out-of-order data and cancelled old chunks are rejected'
  channel.message({v:1,type:'offer',id,name:'file',size:MAX_FILE_SIZE+1,hash:'a'.repeat(64)});await tick();assert.match(status,/중단/);
  channel.message({v:1,type:'offer',id,name:'file',size:5,hash:'a'.repeat(64)});await tick();files.accept();channel.message(encodeChunk(id,2,new ArrayBuffer(1)));await tick();assert.match(status,/중단/);
  files.cancel();channel.message(encodeChunk(id,0,new ArrayBuffer(1)));await tick();files.close();
+});
+test('approved transfers save byte-identical files and advance the queue',async()=>{
+ const downloads=[];globalThis.window={setTimeout(){return 0;}};
+ globalThis.document={createElement(){return {href:'',download:'',click(){downloads.push({url:this.href,name:this.download});}};}};
+ const a=new Channel(),b=new Channel();
+ a.send=data=>{a.sent.push(data);queueMicrotask(()=>b.message(data));};b.send=data=>{b.sent.push(data);queueMicrotask(()=>a.message(data));};
+ let completed=0;
+ const sender=new FileTransfer(a,s=>{if(s.includes('저장을 완료'))completed++;},()=>{});
+ const receiver=new FileTransfer(b,()=>{},offer=>{if(offer)receiver.accept();});
+ const bytes=Uint8Array.from({length:70000},(_,i)=>i%251);
+ sender.enqueue([new File([bytes],'한글🙂.bin'),new File(['second'],'second.txt')]);
+ for(let i=0;i<80&&completed<2;i++)await tick();
+ assert.equal(completed,2);assert.equal(downloads.length,2);assert.equal(downloads[0].name,'한글🙂.bin');
+ assert.deepEqual(new Uint8Array(await (await fetch(downloads[0].url)).arrayBuffer()),bytes);
+ assert.equal(await (await fetch(downloads[1].url)).text(),'second');
+ for(const item of downloads)URL.revokeObjectURL(item.url);sender.close();receiver.close();
+});
+test('command timeout reports uncertainty instead of successful execution',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const channel=new Channel();const client=new RemoteClient(channel,{createDataChannel(){return new Channel();}},()=>null,()=>null);let state;client.subscribe(s=>state=s);
+ channel.message({type:'capabilities',v:1,features:['commandAck']});client.send({type:'global',action:'lock'});
+ t.mock.timers.tick(6001);assert.match(state.result,/시간 초과/);assert.doesNotMatch(state.result,/완료/);client.close();
 });
