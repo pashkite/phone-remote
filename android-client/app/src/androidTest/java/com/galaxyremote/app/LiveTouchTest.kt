@@ -40,6 +40,8 @@ class LiveTouchTest {
             context.startActivity(Intent(context, TouchProbeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             device.waitForIdle(2000)
             val probe = context.getSharedPreferences("touch_probe", Context.MODE_PRIVATE)
+            waitFor("Probe window focused and ready for input") { probe.getBoolean("ready", false) }
+            instrumentation.waitForIdleSync()
             val id = UUID.randomUUID().toString()
             fun touch(phase: String, x: Double = .3) {
                 instrumentation.runOnMainSync {

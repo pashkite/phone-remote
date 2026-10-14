@@ -6,6 +6,10 @@ import android.view.View
 
 /** Debug-only touch target. No production permissions or exported component changes. */
 class TouchProbeActivity : Activity() {
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        getSharedPreferences("touch_probe", MODE_PRIVATE).edit().putBoolean("ready", hasFocus).commit()
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("touch_probe", MODE_PRIVATE)

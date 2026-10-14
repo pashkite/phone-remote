@@ -7,3 +7,11 @@ Android serializes 24ms Accessibility `StrokeDescription.continueStroke` segment
 No new permissions or anonymous access were added. Input runs only during an authorized active remote session. Streaming touch samples use the existing ordered authenticated control channel without per-frame command acknowledgements. Accessibility acceptance does not guarantee an app's response; network and video latency still apply.
 
 Validation: Node sender/legacy pointer tests and TypeScript; Android build and Android 16 instrumentation test verify down and movement before up, release and missing-heartbeat cleanup. Actual Galaxy update installation and subjective feel require device verification. Signed APK uses the existing release certificate and versionCode 17, preserving registrations in an in-place update.
+
+## Signed package evidence
+
+- Android package: `com.galaxyremote.app`, versionName `0.5.3`, versionCode `17` (checked from binary APK manifest).
+- Certificate matches the published v0.5.2 APK; APK signature and 16KiB ZIP alignment verified.
+- APK SHA-256: `6422c6ac900ea8aff4a728341297d7bbe0dbec6c8f70c0d2eb1796bbf5547b1d`.
+- Release binary built from commit `f85feff2062a913e0f83e653953d0feb2c7c9426`; subsequent changes only adjust instrumentation and web cleanup.
+- Initial Android 16 run failed before touch injection because UiAutomation suppressed accessibility services; rerun enables `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES`.
