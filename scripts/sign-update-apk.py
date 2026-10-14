@@ -23,7 +23,10 @@ def run(command):
 
 def certificates(apksigner, apk):
     output = run([apksigner, "verify", "--verbose", "--print-certs", str(apk)])
-    values = re.findall(r"Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})", output)
+    values = re.findall(
+        r"^(?:Signer #\d+|V\d+(?:\.\d+)? Signer):? certificate SHA-256 digest: ([0-9a-fA-F]{64})",
+        output, re.MULTILINE,
+    )
     if not values:
         raise RuntimeError("No verified signing certificate found.")
     return {value.lower() for value in values}
