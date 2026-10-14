@@ -20,6 +20,7 @@ import org.json.JSONObject
 
 class RemoteAccessibilityService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val liveTouch by lazy { LiveTouchController(this, mainHandler, ::screenSize) }
     private var savedClipboard: ClipData? = null
     private var clipboardCaptured = false
     private val restoreClipboard = Runnable {
@@ -41,9 +42,10 @@ class RemoteAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
 
-    override fun onInterrupt() = Unit
+    override fun onInterrupt() { liveTouch.release() }
 
     override fun onDestroy() {
+        liveTouch.release()
         mainHandler.removeCallbacks(restoreClipboard)
         if (clipboardCaptured) restoreClipboard.run()
         if (instance === this) instance = null
@@ -53,6 +55,7 @@ class RemoteAccessibilityService : AccessibilityService() {
     private fun handle(command: JSONObject): Boolean {
         if (!RemotePreferences(this).standbyActive) return false
         return when (command.optString("type")) {
+            "touch" -> liveTouch.receive(command)
             "tap" -> tap(command.optDouble("x"), command.optDouble("y"))
             "longPress" -> longPress(
                 command.optDouble("x"),
@@ -245,6 +248,9 @@ class RemoteAccessibilityService : AccessibilityService() {
     companion object {
         @Volatile
         private var instance: RemoteAccessibilityService? = null
+
+        fun stopTouch() { instance?.let { it.mainHandler.post { it.liveTouch.release() } } }
+        fun isConnected(): Boolean = instance != null
 
         fun dispatch(command: JSONObject): Boolean = instance?.handle(command) ?: false
         fun pasteClipboard(): Boolean = instance?.focusedInput()?.performAction(AccessibilityNodeInfo.ACTION_PASTE) ?: false

@@ -233,6 +233,7 @@ class WebRtcSession(
 
     @Synchronized
     fun closePeer() {
+        RemoteAccessibilityService.stopTouch()
         pendingSessionId = null
         commands?.close(); commands = null
         files?.close(); files = null
@@ -341,7 +342,7 @@ class WebRtcSession(
             },
         )
         fun capabilities() {
-            val features = JSONArray().put("commandAck").put("clipboard").put("files").put("diagnostics").put("standby")
+            val features = JSONArray().put("commandAck").put("clipboard").put("files").put("diagnostics").put("standby").put("liveTouch")
             if (Build.VERSION.SDK_INT >= 29) features.put("pcmAudio")
             sendJson(JSONObject().put("type", "capabilities").put("v", 1).put("features", features))
         }
