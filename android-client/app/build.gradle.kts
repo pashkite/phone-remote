@@ -3,6 +3,15 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Keep the working bootstrap until the custom domain has passed DNS/TLS checks.
+// Existing registrations keep their stored base URL on an in-place update.
+val signalingBaseUrl = providers.gradleProperty("signalingBaseUrl")
+    .orElse("https://galaxy-remote-control.ashkite.chatgpt.site").get()
+require(signalingBaseUrl in setOf(
+    "https://galaxy-remote-control.ashkite.chatgpt.site",
+    "https://remote.ashkite.kro.kr",
+)) { "Use a verified Galaxy Remote HTTPS origin." }
+
 android {
     namespace = "com.galaxyremote.app"
     compileSdk = 35
@@ -18,7 +27,7 @@ android {
         buildConfigField(
             "String",
             "SIGNALING_BASE_URL",
-            "\"https://galaxy-remote-control.ashkite.chatgpt.site\"",
+            "\"$signalingBaseUrl\"",
         )
     }
 
