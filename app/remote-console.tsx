@@ -1246,12 +1246,17 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             <p className="eyebrow">DEVICE PAIRING</p><h2 id="pair-title">갤럭시를 등록해 주세요</h2>
             <p>Galaxy Remote 앱을 연 다음 아래 6자리 코드를 입력하면 이 계정에 안전하게 등록됩니다.</p>
             <h3>1. 휴대폰에 앱 설치</h3>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.2-release.apk" download>
+              <span aria-hidden="true">↓</span>
+              <strong>Galaxy Remote v0.5.2 받기</strong>
+              <small>새 기능 7종 · 기존 서명키 사용 · 실제 휴대폰 설치 검증 전</small>
+            </a>
             <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.5-rotation-fixed-release.apk" download>
               <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote APK 받기</strong>
+              <strong>기존 Galaxy Remote v0.4.5 받기</strong>
               <small>Galaxy arm64 v0.4.5 · 15MB · 화면 회전·입력 안내 문구 오인식 수정</small>
             </a>
-            <details className="install-help"><summary>기존 앱을 업데이트하나요?</summary><p>v0.4.0 이후 버전은 기존 앱 위에 설치하세요. v0.3.1 이하는 기존 앱을 삭제한 뒤 새로 등록해야 합니다.</p></details>
+            <details className="install-help"><summary>기존 앱을 업데이트하나요?</summary><p>v0.5.2는 v0.4.5와 같은 서명키로 만들었습니다. 기존 앱을 삭제하지 않고 설치한 뒤 등록 기기와 설정이 유지되는지 확인해 주세요. 실제 갤럭시에서 업데이트 설치와 새 기능 검증은 아직 진행되지 않았습니다.</p></details>
             <h3>2. 앱에 등록 코드 입력</h3>
             <div className="pair-code-panel">
               {pairingBusy ? <span className="pair-code-loading"><span className="spinner blue" /> 코드 만드는 중</span> : pairing ? <><strong>{pairing.code.slice(0, 3)} {pairing.code.slice(3)}</strong><small>10분 동안 한 번만 사용할 수 있어요.</small></> : <span>코드를 만들지 못했습니다.</span>}
@@ -1295,6 +1300,11 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 </div>
               )) : <div className="empty-device-list">등록된 기기가 없습니다.</div>}
             </div>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.2-release.apk" download>
+              <span aria-hidden="true">↓</span>
+              <strong>Galaxy Remote v0.5.2 받기</strong>
+              <small>기존 서명키 사용 · 실제 휴대폰 설치 검증 전</small>
+            </a>
             <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.5-rotation-fixed-release.apk" download>
               <span aria-hidden="true">↓</span>
               <strong>Galaxy Remote v0.4.5 받기</strong>

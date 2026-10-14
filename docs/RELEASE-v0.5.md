@@ -50,3 +50,10 @@ Use the original signing key; install the update over v0.4.5; check retained reg
 Primary references: https://developer.android.com/media/grow/media-projection ; https://developer.android.com/media/platform/av-capture ; https://developer.android.com/about/versions/10/privacy/changes#clipboard-data ; installed WebRTC 144.7559.09 API inspected in the existing APK and compiled Android source.
 
 Current published APK signing certificate SHA-256: `148c6e2701937b6e3f319569bb31b36311bfd44ed05898c6ba802ec8389d1941`. Historical backup certificate SHA-256 values: `1eed685881c1e0e77d678ef0c8d025ba8bae466c4dd341c823b2c45d64e1b90e` and `e3e37ea27d6b8669b9b736ee8640b312c66e793cd4d4ca7d9f4955b3087e9e96`. Private-key public identifiers were also checked and do not match, so certificate replacement would not recover the current signing identity. Existing v0.4.5 APK signature verified; compiled new ARM64 library LOAD segments are aligned for 16KiB pages. In-place installation/registration retention is not verified and no newly signed installation package was issued.
+
+
+## 2026-10-14 signing-key recovery and domain update
+
+The original matching PKCS12 key and password were found in the user's Google Drive and the existing backup folder was moved into ChatGPT/개발/Galaxy Remote 서명 백업. The earlier workspace-key mismatch findings do not describe this recovered Drive key. It matches the published APK certificate. A signed v0.5.2 APK was generated from the successful build stage of https://github.com/pashkite/phone-remote/actions/runs/38511465188 and its signature and ZIP entry alignment were verified. SHA-256: `ad10086a726f203472bbaa2c5a6d158420daaddf6a7296dec1e11acc44d42253`.
+
+The domain https://remote.ashkite.kro.kr is active with TLS. Web build and 24 tests passed after adding the new APK download alongside the preserved v0.4.5 download. Real Galaxy installation, registration retention, battery and audio/TURN tests remain unverified. See docs/DOMAIN-UPDATE.md for the verified boundaries. Keys and passwords are not committed.
