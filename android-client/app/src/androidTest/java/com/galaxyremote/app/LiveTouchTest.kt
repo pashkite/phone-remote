@@ -32,12 +32,12 @@ class LiveTouchTest {
             assertTrue(label, predicate())
         }
         try {
-            device.wakeUp(); device.executeShellCommand("wm dismiss-keyguard")
+            device.wakeUp(); device.executeShellCommand("wm dismiss-keyguard"); device.pressHome(); device.waitForIdle(5000)
             device.executeShellCommand("settings put secure enabled_accessibility_services com.galaxyremote.app/com.galaxyremote.app.RemoteAccessibilityService")
             device.executeShellCommand("settings put secure accessibility_enabled 1")
             waitFor("Accessibility service connected") { RemoteAccessibilityService.isConnected() }
             prefs.standbyActive = true
-            context.startActivity(Intent(context, TouchProbeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            device.executeShellCommand("am start -W -n ${context.packageName}/.TouchProbeActivity")
             device.waitForIdle(2000)
             val probe = context.getSharedPreferences("touch_probe", Context.MODE_PRIVATE)
             waitFor("Probe window focused and ready for input") { probe.getBoolean("ready", false) }
