@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { normalizedVideoPoint } from "./remote-geometry";
 import ThemeToggle from "./components/theme-toggle";
 import RemoteTools from "./components/remote-tools";
+import { LiveTouchSender } from "../lib/remote/live-touch";
 import { RemoteClient } from "../lib/remote/client";
 import { Diagnostics } from "../lib/remote/diagnostics";
 import { resolveShortcut } from "../lib/remote/shortcuts";
@@ -136,6 +137,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const remoteCandidateIdsRef = useRef(new Set<string>());
   const previousStatsRef = useRef<{ bytes: number; at: number } | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number; at: number; pointerId: number; target: HTMLDivElement; clientX: number; clientY: number; moved: boolean } | null>(null);
+  const livePointerRef = useRef<{ sender: LiveTouchSender; cleanup: () => void } | null>(null);
   const connectionStartingRef = useRef(false);
   const composingRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -287,6 +289,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       reconnectAttemptsRef.current = 0;
     }
     stopTimers();
+    livePointerRef.current?.sender.finish("cancel");
+    livePointerRef.current?.cleanup();
+    livePointerRef.current = null;
     const pointer = pointerStartRef.current;
     pointerStartRef.current = null;
     if (pointer?.target.hasPointerCapture(pointer.pointerId)) pointer.target.releasePointerCapture(pointer.pointerId);
@@ -797,6 +802,12 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }
 
   function sendCommand(command: string, label: string) {
+    livePointerRef.current?.sender.finish("cancel");
+    livePointerRef.current?.cleanup();
+    livePointerRef.current = null;
+    const pointer = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (pointer?.target.hasPointerCapture(pointer.pointerId)) pointer.target.releasePointerCapture(pointer.pointerId);
     if (!sendPayload({ type: "global", action: command })) return;
     setToast(`${label} 명령을 전송했습니다.`);
   }
@@ -935,11 +946,31 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     event.currentTarget.setPointerCapture(event.pointerId);
     pointerStartRef.current = { ...point, at: event.timeStamp, pointerId: event.pointerId,
       target: event.currentTarget, clientX: event.clientX, clientY: event.clientY, moved: false };
+    const client = toolsRef.current;
+    const owner = event.currentTarget.ownerDocument.defaultView;
+    if (client?.supports("liveTouch") && owner) {
+      const target = event.currentTarget, pointerId = event.pointerId;
+      const cancel = () => {
+        livePointerRef.current?.sender.finish("cancel");
+        livePointerRef.current?.cleanup();
+        livePointerRef.current = null;
+        pointerStartRef.current = null;
+        if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+      };
+      const visibility = () => { if (target.ownerDocument.hidden) cancel(); };
+      const cleanup = () => { owner.removeEventListener("blur", cancel); target.ownerDocument.removeEventListener("visibilitychange", visibility); };
+      const sender = new LiveTouchSender(packet => client.sendTouch(packet), owner, point, crypto.randomUUID(), cancel);
+      if (!sender.started) { cancel(); setToast("터치를 보내지 못했어요. 연결을 확인해 주세요."); return; }
+      livePointerRef.current = { sender, cleanup };
+      owner.addEventListener("blur", cancel);
+      target.ownerDocument.addEventListener("visibilitychange", visibility);
+    }
   }
 
-  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+  function onPointerMove(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
     const start = pointerStartRef.current;
     if (!start || start.pointerId !== event.pointerId || start.target !== event.currentTarget) return;
+    livePointerRef.current?.sender.move(normalizedPointer(event, targetVideo));
     if (Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) >= 6) start.moved = true;
   }
 
@@ -950,6 +981,13 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     if (!connected) return;
     const end = normalizedPointer(event, targetVideo);
+    if (livePointerRef.current) {
+      livePointerRef.current.sender.finish("up", end);
+      livePointerRef.current.cleanup();
+      livePointerRef.current = null;
+      (targetVideo ? detachedKeyboardRef : keyboardRef).current?.focus({ preventScroll: true });
+      return;
+    }
     const moved = start.moved || Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) >= 6;
     const durationMs = Math.min(1200, Math.max(60, event.timeStamp - start.at));
     // Clamp releases outside the image to its edge instead of dropping the drag.
@@ -961,6 +999,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   function onPointerCancel(event: React.PointerEvent<HTMLDivElement>) {
     const start = pointerStartRef.current;
     if (start?.pointerId !== event.pointerId || start.target !== event.currentTarget) return;
+    livePointerRef.current?.sender.finish("cancel");
+    livePointerRef.current?.cleanup();
+    livePointerRef.current = null;
     pointerStartRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
@@ -977,6 +1018,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
   function onRemoteWheel(event: React.WheelEvent<HTMLDivElement>) {
     if (!connected) return;
+    if (pointerStartRef.current) { event.preventDefault(); return; }
     event.preventDefault();
     wheelDeltaRef.current.x += event.deltaX;
     wheelDeltaRef.current.y += event.deltaY;
@@ -1059,7 +1101,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       <header className="topbar">
         <div className="brand-lockup">
           <div className="orbit-mark" aria-hidden="true"><span /></div>
-          <div><h1>Galaxy Remote <span className="version-label">v0.5.2</span></h1></div>
+          <div><h1>Galaxy Remote <span className="version-label">v0.5.3</span></h1></div>
           <span className={`connection-pill ${connection}`}><span className="status-dot" />{connected ? "연결됨" : connection === "reconnecting" ? "재연결 중" : waiting ? "승인 대기" : "연결 준비"}</span>
         </div>
         <div className="owner-area">
@@ -1130,9 +1172,10 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               role="application"
               aria-label="연결된 휴대폰 원격 화면"
               onPointerDown={(event) => onPointerDown(event)}
-              onPointerMove={onPointerMove}
+              onPointerMove={(event) => onPointerMove(event)}
               onPointerUp={(event) => onPointerUp(event)}
               onPointerCancel={onPointerCancel}
+              onLostPointerCapture={onPointerCancel}
               onWheel={onRemoteWheel}
               onKeyDown={onPhoneKeyDown}
             >
@@ -1177,9 +1220,10 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               role="application"
               aria-label="분리된 휴대폰 원격 화면"
               onPointerDown={(event) => onPointerDown(event, detachedVideoRef.current)}
-              onPointerMove={onPointerMove}
+              onPointerMove={(event) => onPointerMove(event, detachedVideoRef.current)}
               onPointerUp={(event) => onPointerUp(event, detachedVideoRef.current)}
               onPointerCancel={onPointerCancel}
+              onLostPointerCapture={onPointerCancel}
               onWheel={onRemoteWheel}
               onKeyDown={(event) => { handleDirectionKey(event); }}
             >
@@ -1278,9 +1322,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             <p className="eyebrow">DEVICE PAIRING</p><h2 id="pair-title">갤럭시를 등록해 주세요</h2>
             <p>Galaxy Remote 앱을 연 다음 아래 6자리 코드를 입력하면 이 계정에 안전하게 등록됩니다.</p>
             <h3>1. 휴대폰에 앱 설치</h3>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.2-release.apk" download>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.3-release.apk" download>
               <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote v0.5.2 받기</strong>
+              <strong>Galaxy Remote v0.5.3 받기</strong>
               <small>새 기능 7종 · 기존 서명키 사용 · 실제 휴대폰 설치 검증 전</small>
             </a>
             <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.5-rotation-fixed-release.apk" download>
@@ -1288,7 +1332,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               <strong>기존 Galaxy Remote v0.4.5 받기</strong>
               <small>Galaxy arm64 v0.4.5 · 15MB · 화면 회전·입력 안내 문구 오인식 수정</small>
             </a>
-            <details className="install-help"><summary>기존 앱을 업데이트하나요?</summary><p>v0.5.2는 v0.4.5와 같은 서명키로 만들었습니다. 기존 앱을 삭제하지 않고 설치한 뒤 등록 기기와 설정이 유지되는지 확인해 주세요. 실제 갤럭시에서 업데이트 설치와 새 기능 검증은 아직 진행되지 않았습니다.</p></details>
+            <details className="install-help"><summary>기존 앱을 업데이트하나요?</summary><p>v0.5.3은 v0.4.5와 같은 서명키로 만들었습니다. 기존 앱을 삭제하지 않고 설치한 뒤 등록 기기와 설정이 유지되는지 확인해 주세요. 실제 갤럭시에서 업데이트 설치와 새 기능 검증은 아직 진행되지 않았습니다.</p></details>
             <h3>2. 앱에 등록 코드 입력</h3>
             <div className="pair-code-panel">
               {pairingBusy ? <span className="pair-code-loading"><span className="spinner blue" /> 코드 만드는 중</span> : pairing ? <><strong>{pairing.code.slice(0, 3)} {pairing.code.slice(3)}</strong><small>10분 동안 한 번만 사용할 수 있어요.</small></> : <span>코드를 만들지 못했습니다.</span>}
@@ -1332,9 +1376,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 </div>
               )) : <div className="empty-device-list">등록된 기기가 없습니다.</div>}
             </div>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.2-release.apk" download>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.3-release.apk" download>
               <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote v0.5.2 받기</strong>
+              <strong>Galaxy Remote v0.5.3 받기</strong>
               <small>기존 서명키 사용 · 실제 휴대폰 설치 검증 전</small>
             </a>
             <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.5-rotation-fixed-release.apk" download>

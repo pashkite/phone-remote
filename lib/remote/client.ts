@@ -23,6 +23,8 @@ export class RemoteClient {
   private update(value: Partial<ToolsState>) { if (Object.entries(value).every(([k,v]) => this.state[k as keyof ToolsState] === v)) return; this.state = { ...this.state, ...value }; this.listeners.forEach(l => l(this.state)); }
   opened() { this.diagnostics.record("channel", { state: "open" }); }
   private raw(payload: Record<string, unknown>) { if (this.channel.readyState !== "open" || this.channel.bufferedAmount > 262144) return false; try { this.channel.send(JSON.stringify(payload)); return true; } catch { return false; } }
+  supports(feature: string) { return this.state.features.includes(feature); }
+  sendTouch(payload: Record<string, unknown>) { return this.supports("liveTouch") && this.channel.bufferedAmount <= 8192 && this.raw(payload); }
   send(payload: Record<string, unknown>) {
     if (!this.state.features.includes("commandAck")) return this.raw(payload);
     if (this.pending.size >= 256) { this.update({ result: "명령 응답이 밀리고 있습니다. 잠시 기다려 주세요." }); return false; }
@@ -44,7 +46,7 @@ export class RemoteClient {
     try {
       const m = JSON.parse(text);
       if (m.type === "capabilities" && m.v === PROTOCOL_VERSION && Array.isArray(m.features)) {
-        if (!this.helloSent) { this.helloSent = true; this.raw({ type: "hello", v: 1, features: ["commandAck", "clipboard", "files", "pcmAudio", "diagnostics"] }); }
+        if (!this.helloSent) { this.helloSent = true; this.raw({ type: "hello", v: 1, features: ["commandAck", "clipboard", "files", "pcmAudio", "diagnostics", "liveTouch"] }); }
         // Old Android builds treat any arriving DataChannel as control. Only
         // open extension channels after the peer explicitly supports them.
         if (!this.fileTransfer && m.features.includes("files")) {

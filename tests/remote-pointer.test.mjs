@@ -7,8 +7,8 @@ const handlers = source.slice(source.indexOf('  function onPointerDown('), sourc
 const js = ts.transpileModule(handlers, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 function harness() {
   const payloads = [], captures = new Set(), ref = { current: null };
-  const target = { setPointerCapture: id => captures.add(id), hasPointerCapture: id => captures.has(id), releasePointerCapture: id => captures.delete(id) };
-  const actions = new Function('connected', 'pointerStartRef', 'normalizedPointer', 'sendPayload', 'keyboardRef', 'detachedKeyboardRef', js + '\nreturn {onPointerDown,onPointerMove,onPointerUp,onPointerCancel};')(true, ref, e => ({ x: Math.max(0, Math.min(1,e.clientX/100)), y: Math.max(0, Math.min(1,e.clientY/200)), inside:e.clientX>=0 && e.clientX<=100 && e.clientY>=0 && e.clientY<=200 }), p => payloads.push(p), {current:null}, {current:null});
+  const target = { ownerDocument: { defaultView: null }, setPointerCapture: id => captures.add(id), hasPointerCapture: id => captures.has(id), releasePointerCapture: id => captures.delete(id) };
+  const actions = new Function('connected', 'pointerStartRef', 'normalizedPointer', 'sendPayload', 'keyboardRef', 'detachedKeyboardRef', 'toolsRef', 'livePointerRef', js + '\nreturn {onPointerDown,onPointerMove,onPointerUp,onPointerCancel};')(true, ref, e => ({ x: Math.max(0, Math.min(1,e.clientX/100)), y: Math.max(0, Math.min(1,e.clientY/200)), inside:e.clientX>=0 && e.clientX<=100 && e.clientY>=0 && e.clientY<=200 }), p => payloads.push(p), {current:null}, {current:null}, {current:null}, {current:null});
   const event = (extra={}) => ({ currentTarget:target, clientX:50, clientY:100, pointerId:1, button:0, isPrimary:true, timeStamp:0, preventDefault(){}, ...extra });
   return { ...actions, event, payloads, captures, ref };
 }

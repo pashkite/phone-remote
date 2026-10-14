@@ -6,7 +6,7 @@ export default function PublicConsole({ signInPath }: { signInPath: string }) {
       <header className="topbar">
         <div className="brand-lockup">
           <div className="orbit-mark" aria-hidden="true"><span /></div>
-          <div><h1>Galaxy Remote <span className="version-label">v0.5.2</span></h1></div>
+          <div><h1>Galaxy Remote <span className="version-label">v0.5.3</span></h1></div>
         </div>
         <div className="owner-area"><ThemeToggle /><a className="guest-login" href={signInPath} target="_top">로그인</a></div>
       </header>
@@ -36,8 +36,8 @@ export default function PublicConsole({ signInPath }: { signInPath: string }) {
           <section className="control-card">
             <h3>휴대폰 앱 준비</h3>
             <p className="guest-description">Galaxy Remote 앱을 설치한 뒤, 로그인한 PC에서 등록 코드를 만들면 연결할 수 있어요.</p>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.2-release.apk" download>
-              <span aria-hidden="true">↓</span><strong>Galaxy Remote v0.5.2 받기</strong>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.3-release.apk" download>
+              <span aria-hidden="true">↓</span><strong>Galaxy Remote v0.5.3 받기</strong>
               <small>기존 서명키 사용 · 실제 휴대폰 설치 검증 전</small>
             </a>
           </section>
