@@ -1,0 +1,46 @@
+export default function PublicConsole({ signInPath }: { signInPath: string }) {
+  return (
+    <main className="remote-shell">
+      <header className="topbar">
+        <div className="brand-lockup">
+          <div className="orbit-mark" aria-hidden="true"><span /></div>
+          <div><h1>Galaxy Remote</h1><p>내 갤럭시를 어디서든 안전하게</p></div>
+        </div>
+        <a className="guest-login" href={signInPath} target="_top">로그인</a>
+      </header>
+      <section className="console-grid" aria-label="Galaxy Remote 시작 화면">
+        <article className="screen-card">
+          <div className="card-heading">
+            <div><p className="eyebrow">GALAXY REMOTE</p><h2>휴대폰 화면</h2></div>
+          </div>
+          <div className="screen-stage">
+            <div className="phone-view">
+              <div className="screen-placeholder">
+                <div className="placeholder-orbit" aria-hidden="true"><span /></div>
+                <strong>내 갤럭시를 PC에서</strong>
+                <p>화면을 보고 터치하고, 키보드로 입력하세요. 연결할 때 소유자 계정을 확인합니다.</p>
+              </div>
+            </div>
+          </div>
+        </article>
+        <aside className="control-rail">
+          <section className="control-card connect-card">
+            <p className="eyebrow">GET CONNECTED</p>
+            <h2>갤럭시에 연결하기</h2>
+            <p>사이트는 로그인 없이 둘러볼 수 있어요. 휴대폰을 연결하거나 조작하려면 소유자 계정으로 로그인해 주세요.</p>
+            <a className="primary-action guest-connect" href={signInPath} target="_top">로그인하여 연결</a>
+          </section>
+          <section className="control-card">
+            <h3>휴대폰 앱 준비</h3>
+            <p className="guest-description">Galaxy Remote 앱을 설치한 뒤, 로그인한 PC에서 등록 코드를 만들면 연결할 수 있어요.</p>
+            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.2-release.apk" download>
+              <span aria-hidden="true">↓</span><strong>Galaxy Remote v0.5.2 받기</strong>
+              <small>기존 서명키 사용 · 실제 휴대폰 설치 검증 전</small>
+            </a>
+          </section>
+          <section className="privacy-note"><span className="shield" aria-hidden="true">◇</span><div><strong>소유자만 연결할 수 있어요</strong><p>등록 기기와 연결 정보는 로그인한 소유자에게만 표시됩니다. 휴대폰에서 허용한 동안만 화면을 공유하고 조작할 수 있어요.</p></div></section>
+        </aside>
+      </section>
+    </main>
+  );
+}

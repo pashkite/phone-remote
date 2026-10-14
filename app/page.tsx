@@ -1,20 +1,17 @@
 import RemoteConsole from "./remote-console";
+import PublicConsole from "./public-console";
 import {
+  chatGPTSignInPath,
   chatGPTSignOutPath,
   getChatGPTUser,
   isAllowedOwnerEmail,
-  requireChatGPTUser,
 } from "./chatgpt-auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const authenticatedUser = await getChatGPTUser();
-  const user = authenticatedUser ?? (
-    process.env.NODE_ENV === "development"
-      ? { displayName: "Preview Owner", email: "preview@local.test" }
-      : await requireChatGPTUser("/")
-  );
+  const user = await getChatGPTUser();
+  if (!user) return <PublicConsole signInPath={chatGPTSignInPath("/")} />;
 
   if (process.env.NODE_ENV !== "development" && !isAllowedOwnerEmail(user.email)) {
     return (
