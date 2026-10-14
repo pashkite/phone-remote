@@ -3,19 +3,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 const code = ts.transpileModule(fs.readFileSync(new URL('../lib/remote/shortcuts.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { shortcutStep } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+const { resolveShortcut } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 const key = (value, extra = {}) => ({ key: value, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, repeat: false, isComposing: false, ...extra });
-test('Alt+H sends recent apps once while Ctrl+H and text fields remain untouched', () => {
-  assert.equal(shortcutStep(key('h', { altKey: true }), 0, 100, false).action.command, 'recents');
-  assert.equal(shortcutStep(key('h', { altKey: true, repeat: true }), 0, 100, false).action, null);
-  assert.equal(shortcutStep(key('h', { altKey: true, repeat: true }), 0, 100, false).consume, true);
-  for (const event of [key('h', { ctrlKey: true }), key('h', { altKey: true, ctrlKey: true }), key('h', { altKey: true, isComposing: true })]) assert.equal(shortcutStep(event, 0, 100, false).consume, false);
-  assert.equal(shortcutStep(key('h', { altKey: true }), 0, 100, true).consume, false);
+test('Alt+R/H/B map to recent apps/home/back and repeated keys do not resend', () => {
+  for (const [letter, command] of [['r', 'recents'], ['h', 'home'], ['b', 'back']]) {
+    assert.equal(resolveShortcut(key(letter, { altKey: true }), false).action.command, command);
+    assert.equal(resolveShortcut(key(letter.toUpperCase(), { altKey: true }), false).action.command, command);
+    assert.equal(resolveShortcut(key(letter, { altKey: true, repeat: true }), false).action, null);
+    assert.equal(resolveShortcut(key(letter, { altKey: true, repeat: true }), false).consume, true);
+  }
 });
-test('shortcut prefix expires, cancels on unrelated keys and consumes only mapped actions', () => {
-  const armed = shortcutStep(key('F8'), 0, 100, false).armedUntil;
-  assert.equal(shortcutStep(key('h'), armed, 200, false).action.command, 'home');
-  assert.equal(shortcutStep(key('r'), armed, 1600, false).consume, false);
-  assert.equal(shortcutStep(key('x'), armed, 200, false).armedUntil, 0);
-  assert.equal(shortcutStep(key('h'), 0, 200, false).consume, false);
+test('function keys, browser modifiers, IME and editable fields remain untouched', () => {
+  for (let n = 1; n <= 12; n++) assert.equal(resolveShortcut(key(`F${n}`), false).consume, false);
+  for (const event of [key('h'), key('h', { ctrlKey: true }), key('h', { altKey: true, ctrlKey: true }), key('h', { altKey: true, shiftKey: true }), key('h', { altKey: true, metaKey: true }), key('h', { altKey: true, isComposing: true }), key('x', { altKey: true })]) assert.equal(resolveShortcut(event, false).consume, false);
+  assert.equal(resolveShortcut(key('h', { altKey: true }), true).consume, false);
 });
