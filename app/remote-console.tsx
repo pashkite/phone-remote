@@ -958,11 +958,12 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
       };
       const visibility = () => { if (target.ownerDocument.hidden) cancel(); };
-      const cleanup = () => { owner.removeEventListener("blur", cancel); target.ownerDocument.removeEventListener("visibilitychange", visibility); };
+      const cleanup = () => { owner.removeEventListener("blur", cancel); owner.removeEventListener("pagehide", cancel); target.ownerDocument.removeEventListener("visibilitychange", visibility); };
       const sender = new LiveTouchSender(packet => client.sendTouch(packet), owner, point, crypto.randomUUID(), cancel);
       if (!sender.started) { cancel(); setToast("터치를 보내지 못했어요. 연결을 확인해 주세요."); return; }
       livePointerRef.current = { sender, cleanup };
       owner.addEventListener("blur", cancel);
+      owner.addEventListener("pagehide", cancel);
       target.ownerDocument.addEventListener("visibilitychange", visibility);
     }
   }
@@ -1209,7 +1210,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               )}
             </div>
           </div>
-          <div className="screen-help"><span aria-hidden="true">ⓘ</span>클릭·드래그·마우스 휠·방향키를 휴대폰 터치로 전달합니다. 일부 보안·DRM 앱은 Android 정책상 화면이 검게 표시될 수 있습니다.</div>
+          <div className="screen-help"><span aria-hidden="true">ⓘ</span>실시간 드래그는 휴대폰 앱 v0.5.3 이상에서 사용할 수 있어요. 클릭·휠·방향키도 지원합니다. 일부 보안·DRM 앱은 Android 정책상 화면이 검게 표시될 수 있습니다.</div>
         </article>
 
         {detachedWindow && createPortal(

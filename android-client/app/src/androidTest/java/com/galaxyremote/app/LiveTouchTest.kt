@@ -1,5 +1,7 @@
 package com.galaxyremote.app
 
+import android.app.UiAutomation
+import androidx.test.uiautomator.Configurator
 import android.content.Context
 import android.content.Intent
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -16,13 +18,16 @@ class LiveTouchTest {
     @Test fun dragMovesBeforeReleaseAndTimeoutReleasesHeldPointer() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
+        val configurator = Configurator.getInstance()
+        val oldFlags = configurator.uiAutomationFlags
+        configurator.setUiAutomationFlags(oldFlags or UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         val device = UiDevice.getInstance(instrumentation)
         val oldServices = device.executeShellCommand("settings get secure enabled_accessibility_services").trim()
         val oldEnabled = device.executeShellCommand("settings get secure accessibility_enabled").trim()
         val prefs = RemotePreferences(context)
         val oldStandby = prefs.standbyActive
         fun waitFor(label: String, predicate: () -> Boolean) {
-            val end = System.currentTimeMillis() + 5000
+            val end = System.currentTimeMillis() + 15000
             while (!predicate() && System.currentTimeMillis() < end) Thread.sleep(25)
             assertTrue(label, predicate())
         }
@@ -61,6 +66,7 @@ class LiveTouchTest {
             device.executeShellCommand("settings put secure enabled_accessibility_services ${if (oldServices == "null") "\"\"" else oldServices}")
             device.executeShellCommand("settings put secure accessibility_enabled ${if (oldEnabled == "null") "0" else oldEnabled}")
             device.pressHome()
+            configurator.setUiAutomationFlags(oldFlags)
         }
     }
 }

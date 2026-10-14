@@ -11,6 +11,7 @@ export class LiveTouchSender {
     this.point = point;
     this.active = this.packet("down");
     if (this.active) this.timer = clock.setInterval(() => {
+      if (!this.active) return;
       if (!this.packet("move")) { this.finish("cancel"); this.failed(); }
     }, 40);
   }
