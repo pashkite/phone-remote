@@ -313,3 +313,6 @@ summary:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outl
 .tools-note { color:#6a788a; }
 .file-drop { display:block; padding:10px; border:1px dashed #9aabc2; border-radius:8px; font-size:12px; }
 .file-drop input { max-width:100%; margin-top:8px; }
+
+.shortcut-lines { display: grid; gap: 8px; margin-top: 12px; line-height: 1.6; }
+.shortcut-lines kbd { padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-soft); font: inherit; font-weight: 650; }

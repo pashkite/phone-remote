@@ -6,7 +6,7 @@ import { normalizedVideoPoint } from "./remote-geometry";
 import RemoteTools from "./components/remote-tools";
 import { RemoteClient } from "../lib/remote/client";
 import { Diagnostics } from "../lib/remote/diagnostics";
-import { shortcutStep } from "../lib/remote/shortcuts";
+import { resolveShortcut } from "../lib/remote/shortcuts";
 
 type ConnectionState = "offline" | "waiting" | "reconnecting" | "connected";
 type PcMode = "personal" | "public";
@@ -474,23 +474,18 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     if (!connected || dialog) return;
     const targets = [window, ...(detachedWindow && !detachedWindow.closed ? [detachedWindow] : [])];
     const cleanups = targets.map((targetWindow) => {
-      let armedUntil = 0;
-      const reset = () => { armedUntil = 0; };
       const keydown = (event: KeyboardEvent) => {
         const target = event.target as Element | null;
         const editable = target?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable='false'])");
         const phoneInput = target?.matches?.(".remote-keyboard-capture, .detached-keyboard-capture");
-        const result = shortcutStep(event, armedUntil, Date.now(), (!!editable && !phoneInput) || event.getModifierState("AltGraph"));
-        armedUntil = result.armedUntil;
+        const result = resolveShortcut(event, (!!editable && !phoneInput) || event.getModifierState("AltGraph"));
         if (!result.consume) return;
         event.preventDefault();
         event.stopPropagation();
         if (result.action) dispatchShortcut(result.action.command, result.action.label);
-        else if (event.key === "F8") setToast("단축키: R 최근 앱 · H 홈 · B 뒤로 · N 알림창 (1.5초 안에 선택)");
       };
       targetWindow.addEventListener("keydown", keydown, true);
-      targetWindow.addEventListener("blur", reset);
-      return () => { targetWindow.removeEventListener("keydown", keydown, true); targetWindow.removeEventListener("blur", reset); };
+      return () => { targetWindow.removeEventListener("keydown", keydown, true); };
     });
     return () => cleanups.forEach((cleanup) => cleanup());
   }, [connected, dialog, detachedWindow]);
@@ -993,14 +988,14 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       ArrowLeft: "right",
       ArrowRight: "left",
     }[event.key] as "up" | "down" | "left" | "right" | undefined;
-    if (!connected || !direction) return false;
+    if (!connected || !direction || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return false;
     event.preventDefault();
     sendViewportSwipe(direction);
     return true;
   }
 
   function onPhoneKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (!connected) return;
+    if (!connected || event.ctrlKey || event.altKey || event.metaKey) return;
     if (event.target !== event.currentTarget) return;
     if (handleDirectionKey(event)) return;
     if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
@@ -1032,7 +1027,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }
 
   function onKeyboardKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (!connected) return;
+    if (!connected || event.ctrlKey || event.altKey || event.metaKey) return;
     if (handleDirectionKey(event)) return;
     if (event.key === "Backspace") {
       event.preventDefault();
@@ -1239,7 +1234,14 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             <div className="quick-grid">
               {controls.map((control) => <button key={control.command} type="button" disabled={!connected} onClick={() => sendCommand(control.command, control.label)}><span aria-hidden="true">{control.icon}</span>{control.label}</button>)}
             </div>
-            <details className="install-help"><summary>키보드 단축키</summary><p>Alt+H: 최근 앱. 또는 F8을 누른 뒤 1.5초 안에 R: 최근 앱 · H: 홈 · B: 뒤로 · N: 알림창. 연결 중인 화면과 분리 창에서만 사용할 수 있어요. 일반 입력란과 설정창에서는 꺼집니다. 노트북은 Fn+F8이 필요할 수 있어요.</p></details>
+            <details className="install-help"><summary>키보드 단축키</summary>
+              <div className="shortcut-lines">
+                <div>최근 앱 : <kbd>Alt + R</kbd></div>
+                <div>홈 : <kbd>Alt + H</kbd></div>
+                <div>뒤로가기 : <kbd>Alt + B</kbd></div>
+              </div>
+              <p>연결 중인 사이트·분리 창에서 사용합니다.<br />일반 입력란과 설정창에서는 작동하지 않습니다.</p>
+            </details>
           </section>
 
           <RemoteTools key={toolsClient?.id ?? "offline"} client={toolsClient} diagnostics={diagnostics} />
