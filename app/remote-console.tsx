@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { normalizedVideoPoint } from "./remote-geometry";
+import ThemeToggle from "./components/theme-toggle";
 import RemoteTools from "./components/remote-tools";
 import { RemoteClient } from "../lib/remote/client";
 import { Diagnostics } from "../lib/remote/diagnostics";
@@ -134,7 +135,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const textBufferRef = useRef("");
   const remoteCandidateIdsRef = useRef(new Set<string>());
   const previousStatsRef = useRef<{ bytes: number; at: number } | null>(null);
-  const pointerStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
+  const pointerStartRef = useRef<{ x: number; y: number; at: number; pointerId: number; target: HTMLDivElement; clientX: number; clientY: number; moved: boolean } | null>(null);
+  const connectionStartingRef = useRef(false);
   const composingRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -285,6 +287,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       reconnectAttemptsRef.current = 0;
     }
     stopTimers();
+    const pointer = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (pointer?.target.hasPointerCapture(pointer.pointerId)) pointer.target.releasePointerCapture(pointer.pointerId);
     toolsRef.current?.close();
     toolsRef.current = null;
     setToolsClient(null);
@@ -555,211 +560,218 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }
 
   async function beginConnection() {
-    if (!selectedDevice) {
-      openPairing();
-      return;
-    }
-    if (!supportsNotificationApproval(selectedDevice.appVersion)) {
-      setConnectionError("휴대폰 앱을 v0.4.5로 업데이트한 뒤 다시 눌러 주세요. 기기 등록은 유지됩니다.");
-      setToast("앱 업데이트가 필요해요.");
-      setDialog("settings");
-      return;
-    }
-    if (!selectedDevice.online) {
-      setConnectionError("휴대폰 앱에서 ‘연결 요청 알림’을 켠 뒤 다시 시도해 주세요.");
-      setToast("현재 휴대폰이 오프라인이에요.");
-      return;
-    }
-
-    if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
-    reconnectTimerRef.current = null;
-    intentionalCloseRef.current = false;
-    await closeConnection(true, false);
-    setConnection("waiting");
-    setConnectionError(null);
-    setConnectionHint("휴대폰으로 승인 알림을 보내는 중이에요.");
-
+    if (connectionStartingRef.current) return;
+    connectionStartingRef.current = true;
     try {
-      const [sessionResponse, iceResponse] = await Promise.all([
-        fetch("/api/sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ deviceId: selectedDevice.id }),
-        }),
-        fetch("/api/ice", { cache: "no-store" }),
-      ]);
-      if (!sessionResponse.ok) throw new Error(await responseError(sessionResponse, "연결을 시작하지 못했습니다."));
-      if (!iceResponse.ok) throw new Error(await responseError(iceResponse, "네트워크 설정을 불러오지 못했습니다."));
-
-      const { sessionId } = (await sessionResponse.json()) as { sessionId: string };
-      const { iceServers } = (await iceResponse.json()) as { iceServers: RTCIceServer[] };
-      diagnostics.record("connection_request", { state: "created" });
-      sessionIdRef.current = sessionId;
-
-      const peer = new RTCPeerConnection({
-        iceServers,
-        bundlePolicy: "max-bundle",
-        iceCandidatePoolSize: 2,
-      });
-      peerRef.current = peer;
-      const videoTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
-      const videoCapabilities = RTCRtpReceiver.getCapabilities?.("video");
-      const vp8Codecs = videoCapabilities?.codecs.filter(
-        (codec) => codec.mimeType.toLowerCase() === "video/vp8",
-      );
-      if (vp8Codecs?.length && "setCodecPreferences" in videoTransceiver) {
-        videoTransceiver.setCodecPreferences(vp8Codecs);
+      if (!selectedDevice) {
+        openPairing();
+        return;
       }
-      peer.ontrack = (event) => {
-        const stream = event.streams[0] ?? new MediaStream([event.track]);
-        remoteStreamRef.current = stream;
-        if (videoRef.current && videoRef.current.srcObject !== stream) videoRef.current.srcObject = stream;
-        if (detachedVideoRef.current) {
-          if (detachedVideoRef.current.srcObject !== stream) detachedVideoRef.current.srcObject = stream;
-          void detachedVideoRef.current.play().catch(() => {
-            // The canplay event retries once the first frame is ready.
-          });
-        }
-      };
-      peer.onicecandidate = (event) => {
-        const candidate = event.candidate;
-        if (!candidate) return;
-        const payload = candidate.toJSON();
-        void fetch(`/api/sessions/${sessionId}/candidate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            candidate: payload.candidate,
-            sdpMid: payload.sdpMid,
-            sdpMLineIndex: payload.sdpMLineIndex,
+      if (!supportsNotificationApproval(selectedDevice.appVersion)) {
+        setConnectionError("휴대폰 앱을 v0.4.5로 업데이트한 뒤 다시 눌러 주세요. 기기 등록은 유지됩니다.");
+        setToast("앱 업데이트가 필요해요.");
+        setDialog("settings");
+        return;
+      }
+      if (!selectedDevice.online) {
+        setConnectionError("휴대폰 앱에서 ‘연결 요청 알림’을 켠 뒤 다시 시도해 주세요.");
+        setToast("현재 휴대폰이 오프라인이에요.");
+        return;
+      }
+
+      if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+      intentionalCloseRef.current = false;
+      await closeConnection(true, false);
+      setConnection("waiting");
+      setConnectionError(null);
+      setConnectionHint("휴대폰으로 승인 알림을 보내는 중이에요.");
+
+      try {
+        const [sessionResponse, iceResponse] = await Promise.all([
+          fetch("/api/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ deviceId: selectedDevice.id }),
           }),
-        }).catch(() => {
-          // Later candidates can still establish a direct or TURN path.
+          fetch("/api/ice", { cache: "no-store" }),
+        ]);
+        if (!sessionResponse.ok) throw new Error(await responseError(sessionResponse, "연결을 시작하지 못했습니다."));
+        if (!iceResponse.ok) throw new Error(await responseError(iceResponse, "네트워크 설정을 불러오지 못했습니다."));
+
+        const { sessionId } = (await sessionResponse.json()) as { sessionId: string };
+        const { iceServers } = (await iceResponse.json()) as { iceServers: RTCIceServer[] };
+        diagnostics.record("connection_request", { state: "created" });
+        sessionIdRef.current = sessionId;
+
+        const peer = new RTCPeerConnection({
+          iceServers,
+          bundlePolicy: "max-bundle",
+          iceCandidatePoolSize: 2,
         });
-      };
-      peer.onconnectionstatechange = () => {
-        if (peer.connectionState === "connected") {
-          if (answerPollRef.current) window.clearInterval(answerPollRef.current);
-          answerPollRef.current = null;
+        peerRef.current = peer;
+        const videoTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
+        const videoCapabilities = RTCRtpReceiver.getCapabilities?.("video");
+        const vp8Codecs = videoCapabilities?.codecs.filter(
+          (codec) => codec.mimeType.toLowerCase() === "video/vp8",
+        );
+        if (vp8Codecs?.length && "setCodecPreferences" in videoTransceiver) {
+          videoTransceiver.setCodecPreferences(vp8Codecs);
+        }
+        peer.ontrack = (event) => {
+          const stream = event.streams[0] ?? new MediaStream([event.track]);
+          remoteStreamRef.current = stream;
+          if (videoRef.current && videoRef.current.srcObject !== stream) videoRef.current.srcObject = stream;
+          if (detachedVideoRef.current) {
+            if (detachedVideoRef.current.srcObject !== stream) detachedVideoRef.current.srcObject = stream;
+            void detachedVideoRef.current.play().catch(() => {
+              // The canplay event retries once the first frame is ready.
+            });
+          }
+        };
+        peer.onicecandidate = (event) => {
+          const candidate = event.candidate;
+          if (!candidate) return;
+          const payload = candidate.toJSON();
+          void fetch(`/api/sessions/${sessionId}/candidate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              candidate: payload.candidate,
+              sdpMid: payload.sdpMid,
+              sdpMLineIndex: payload.sdpMLineIndex,
+            }),
+          }).catch(() => {
+            // Later candidates can still establish a direct or TURN path.
+          });
+        };
+        peer.onconnectionstatechange = () => {
+          if (peer.connectionState === "connected") {
+            if (answerPollRef.current) window.clearInterval(answerPollRef.current);
+            answerPollRef.current = null;
+            setConnectionError(null);
+            setConnectionHint(null);
+            reconnectAttemptsRef.current = 0;
+            startStats(peer);
+            if (channelRef.current?.readyState === "open") {
+              setConnection("connected");
+              setToast("휴대폰과 안전하게 연결됐어요.");
+            }
+          } else if (["failed", "closed"].includes(peer.connectionState) && !intentionalCloseRef.current) {
+            queueReconnect("영상 연결이 끊겼습니다.");
+          } else if (peer.connectionState === "disconnected" && !intentionalCloseRef.current) {
+            setConnectionHint("네트워크 복구를 기다리는 중이에요.");
+          }
+        };
+
+        const channel = peer.createDataChannel("control", { ordered: true });
+        channelRef.current = channel;
+        const tools = new RemoteClient(channel, peer, () => videoRef.current, () => remoteStreamRef.current, diagnostics);
+        toolsRef.current = tools;
+        setToolsClient(tools);
+        channel.onopen = () => {
+          tools.opened();
+          setConnection("connected");
           setConnectionError(null);
           setConnectionHint(null);
           reconnectAttemptsRef.current = 0;
+          setToast("휴대폰과 안전하게 연결됐어요.");
+          sendPayload({ type: "quality", shortEdge: resolutionRef.current, fps: frameRateRef.current });
           startStats(peer);
-          if (channelRef.current?.readyState === "open") {
-            setConnection("connected");
-            setToast("휴대폰과 안전하게 연결됐어요.");
+        };
+        channel.onclose = () => {
+          if (peer.connectionState !== "closed" && !intentionalCloseRef.current) {
+            queueReconnect("원격 조작 채널이 닫혔습니다.");
           }
-        } else if (["failed", "closed"].includes(peer.connectionState) && !intentionalCloseRef.current) {
-          queueReconnect("영상 연결이 끊겼습니다.");
-        } else if (peer.connectionState === "disconnected" && !intentionalCloseRef.current) {
-          setConnectionHint("네트워크 복구를 기다리는 중이에요.");
-        }
-      };
-
-      const channel = peer.createDataChannel("control", { ordered: true });
-      channelRef.current = channel;
-      const tools = new RemoteClient(channel, peer, () => videoRef.current, () => remoteStreamRef.current, diagnostics);
-      toolsRef.current = tools;
-      setToolsClient(tools);
-      channel.onopen = () => {
-        tools.opened();
-        setConnection("connected");
-        setConnectionError(null);
-        setConnectionHint(null);
-        reconnectAttemptsRef.current = 0;
-        setToast("휴대폰과 안전하게 연결됐어요.");
-        sendPayload({ type: "quality", shortEdge: resolutionRef.current, fps: frameRateRef.current });
-        startStats(peer);
-      };
-      channel.onclose = () => {
-        if (peer.connectionState !== "closed" && !intentionalCloseRef.current) {
-          queueReconnect("원격 조작 채널이 닫혔습니다.");
-        }
-      };
+        };
 
 
-      const offer = await peer.createOffer({ offerToReceiveAudio: false });
-      await peer.setLocalDescription(offer);
-      if (!peer.localDescription) throw new Error("연결 요청을 완성하지 못했습니다.");
+        const offer = await peer.createOffer({ offerToReceiveAudio: false });
+        await peer.setLocalDescription(offer);
+        if (!peer.localDescription) throw new Error("연결 요청을 완성하지 못했습니다.");
 
-      const offerResponse = await fetch(`/api/sessions/${sessionId}/offer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(peer.localDescription.toJSON()),
-      });
-      if (!offerResponse.ok) throw new Error(await responseError(offerResponse, "휴대폰으로 연결 요청을 보내지 못했습니다."));
-      setConnectionHint("휴대폰 알림에서 승인 또는 거절을 선택해 주세요.");
-      setToast("휴대폰으로 연결 승인 알림을 보냈어요.");
+        const offerResponse = await fetch(`/api/sessions/${sessionId}/offer`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(peer.localDescription.toJSON()),
+        });
+        if (!offerResponse.ok) throw new Error(await responseError(offerResponse, "휴대폰으로 연결 요청을 보내지 못했습니다."));
+        setConnectionHint("휴대폰 알림에서 승인 또는 거절을 선택해 주세요.");
+        setToast("휴대폰으로 연결 승인 알림을 보냈어요.");
 
-      let attempts = 0;
-      let polling = false;
-      let lastState = "";
-      const pollAnswer = async () => {
-        if (polling) return;
-        polling = true;
-        attempts += 1;
-        try {
-          const response = await fetch(`/api/sessions/${sessionId}`, { cache: "no-store" });
-          if (!response.ok) throw new Error(await responseError(response, "연결 요청을 확인하지 못했습니다."));
-          const payload = (await response.json()) as {
-            session?: { state: string; answerType: string | null; answerSdp: string | null };
-            candidates?: Array<{
-              id: string;
-              candidate: string;
-              sdpMid: string | null;
-              sdpMLineIndex: number | null;
-            }>;
-          };
-          const state = payload.session?.state ?? "";
-          if (state !== lastState) {
-            diagnostics.record("connection_request", { state });
-            lastState = state;
-            if (state === "consent_pending") {
-              setConnectionHint("휴대폰의 Android 화면 공유 확인창을 승인해 주세요.");
-            } else if (state === "offer_ready") {
-              setConnectionHint("승인 완료 · 보안 연결을 만드는 중이에요.");
-            } else if (state === "answer_ready") {
-              setConnectionHint("화면 스트림을 여는 중이에요.");
-            }
-          }
-          if (state === "rejected") throw new Error("휴대폰에서 연결 요청을 거절했습니다.");
-          if (state === "closed") throw new Error("연결 요청이 닫혔습니다.");
-          if (payload.session?.answerType === "answer" && payload.session.answerSdp && !peer.currentRemoteDescription) {
-            await peer.setRemoteDescription({ type: "answer", sdp: payload.session.answerSdp });
-          }
-          if (peer.currentRemoteDescription) {
-            for (const candidate of payload.candidates ?? []) {
-              if (!candidate.id || remoteCandidateIdsRef.current.has(candidate.id)) continue;
-              try {
-                await peer.addIceCandidate({
-                  candidate: candidate.candidate,
-                  sdpMid: candidate.sdpMid,
-                  sdpMLineIndex: candidate.sdpMLineIndex,
-                });
-                remoteCandidateIdsRef.current.add(candidate.id);
-              } catch {
-                // A malformed or obsolete candidate should not abort the whole session.
+        let attempts = 0;
+        let polling = false;
+        let lastState = "";
+        const pollAnswer = async () => {
+          if (polling || sessionIdRef.current !== sessionId) return;
+          polling = true;
+          attempts += 1;
+          try {
+            const response = await fetch(`/api/sessions/${sessionId}`, { cache: "no-store" });
+            if (sessionIdRef.current !== sessionId) return;
+            if (!response.ok) throw new Error(await responseError(response, "연결 요청을 확인하지 못했습니다."));
+            const payload = (await response.json()) as {
+              session?: { state: string; answerType: string | null; answerSdp: string | null };
+              candidates?: Array<{
+                id: string;
+                candidate: string;
+                sdpMid: string | null;
+                sdpMLineIndex: number | null;
+              }>;
+            };
+            const state = payload.session?.state ?? "";
+            if (state !== lastState) {
+              diagnostics.record("connection_request", { state });
+              lastState = state;
+              if (state === "consent_pending") {
+                setConnectionHint("휴대폰의 Android 화면 공유 확인창을 승인해 주세요.");
+              } else if (state === "offer_ready") {
+                setConnectionHint("승인 완료 · 보안 연결을 만드는 중이에요.");
+              } else if (state === "answer_ready") {
+                setConnectionHint("화면 스트림을 여는 중이에요.");
               }
             }
+            if (state === "rejected") throw new Error("휴대폰에서 연결 요청을 거절했습니다.");
+            if (state === "closed") throw new Error("연결 요청이 닫혔습니다.");
+            if (payload.session?.answerType === "answer" && payload.session.answerSdp && !peer.currentRemoteDescription) {
+              await peer.setRemoteDescription({ type: "answer", sdp: payload.session.answerSdp });
+            }
+            if (peer.currentRemoteDescription) {
+              for (const candidate of payload.candidates ?? []) {
+                if (!candidate.id || remoteCandidateIdsRef.current.has(candidate.id)) continue;
+                try {
+                  await peer.addIceCandidate({
+                    candidate: candidate.candidate,
+                    sdpMid: candidate.sdpMid,
+                    sdpMLineIndex: candidate.sdpMLineIndex,
+                  });
+                  remoteCandidateIdsRef.current.add(candidate.id);
+                } catch {
+                  // A malformed or obsolete candidate should not abort the whole session.
+                }
+              }
+            }
+            if (attempts > 120) {
+              throw new Error("휴대폰 응답 시간이 초과되었습니다.");
+            }
+          } catch (error) {
+            if (sessionIdRef.current !== sessionId) return;
+            if (answerPollRef.current) window.clearInterval(answerPollRef.current);
+            answerPollRef.current = null;
+            setConnectionError(error instanceof Error ? error.message : "연결하지 못했습니다.");
+            void closeConnection();
+          } finally {
+            polling = false;
           }
-          if (attempts > 120) {
-            throw new Error("휴대폰 응답 시간이 초과되었습니다.");
-          }
-        } catch (error) {
-          if (answerPollRef.current) window.clearInterval(answerPollRef.current);
-          answerPollRef.current = null;
-          setConnectionError(error instanceof Error ? error.message : "연결하지 못했습니다.");
-          void closeConnection();
-        } finally {
-          polling = false;
-        }
-      };
-      answerPollRef.current = window.setInterval(() => void pollAnswer(), 500);
-      void pollAnswer();
-    } catch (error) {
-      setConnectionError(error instanceof Error ? error.message : "연결을 시작하지 못했습니다.");
-      await closeConnection();
-    }
+        };
+        answerPollRef.current = window.setInterval(() => void pollAnswer(), 500);
+        void pollAnswer();
+      } catch (error) {
+        setConnectionError(error instanceof Error ? error.message : "연결을 시작하지 못했습니다.");
+        await closeConnection();
+      }
+
+    } finally { connectionStartingRef.current = false; }
   }
 
   function queueReconnect(reason: string) {
@@ -915,41 +927,42 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     );
   }
 
-  function sendPointerGesture(start: { x: number; y: number; at: number }, end: { x: number; y: number }, endedAt: number) {
-    const distance = Math.hypot(end.x - start.x, end.y - start.y);
-    const durationMs = Math.min(1_200, Math.max(60, endedAt - start.at));
-    if (distance < 0.018) {
-      sendPayload(durationMs >= 520
-        ? { type: "longPress", x: end.x, y: end.y, durationMs }
-        : { type: "tap", x: end.x, y: end.y });
-    } else {
-      sendPayload({ type: "swipe", fromX: start.x, fromY: start.y, toX: end.x, toY: end.y, durationMs: Math.max(120, durationMs) });
-    }
-  }
-
-  function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (!connected) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const point = normalizedPointer(event);
+  function onPointerDown(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
+    if (!connected || !event.isPrimary || event.button !== 0 || pointerStartRef.current) return;
+    const point = normalizedPointer(event, targetVideo);
     if (!point.inside) return;
-    pointerStartRef.current = { ...point, at: event.timeStamp };
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointerStartRef.current = { ...point, at: event.timeStamp, pointerId: event.pointerId,
+      target: event.currentTarget, clientX: event.clientX, clientY: event.clientY, moved: false };
   }
 
-  function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
-    if (!connected || !pointerStartRef.current) return;
+  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
     const start = pointerStartRef.current;
-    const end = normalizedPointer(event);
+    if (!start || start.pointerId !== event.pointerId || start.target !== event.currentTarget) return;
+    if (Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) >= 6) start.moved = true;
+  }
+
+  function onPointerUp(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
+    const start = pointerStartRef.current;
+    if (!start || start.pointerId !== event.pointerId || start.target !== event.currentTarget) return;
     pointerStartRef.current = null;
-    if (!end.inside) return;
-    sendPointerGesture(start, end, event.timeStamp);
-    keyboardRef.current?.focus({ preventScroll: true });
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (!connected) return;
+    const end = normalizedPointer(event, targetVideo);
+    const moved = start.moved || Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) >= 6;
+    const durationMs = Math.min(1200, Math.max(60, event.timeStamp - start.at));
+    // Clamp releases outside the image to its edge instead of dropping the drag.
+    if (moved) sendPayload({ type: "swipe", fromX: start.x, fromY: start.y, toX: end.x, toY: end.y, durationMs: Math.min(400, durationMs) });
+    else sendPayload(durationMs >= 520 ? { type: "longPress", x: start.x, y: start.y, durationMs } : { type: "tap", x: start.x, y: start.y });
+    (targetVideo ? detachedKeyboardRef : keyboardRef).current?.focus({ preventScroll: true });
   }
 
   function onPointerCancel(event: React.PointerEvent<HTMLDivElement>) {
+    const start = pointerStartRef.current;
+    if (start?.pointerId !== event.pointerId || start.target !== event.currentTarget) return;
     pointerStartRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
   function sendViewportSwipe(direction: "up" | "down" | "left" | "right") {
@@ -1046,10 +1059,11 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       <header className="topbar">
         <div className="brand-lockup">
           <div className="orbit-mark" aria-hidden="true"><span /></div>
-          <div><h1>Galaxy Remote</h1><p>내 갤럭시를 어디서든 안전하게</p></div>
+          <div><h1>Galaxy Remote <span className="version-label">v0.5.2</span></h1></div>
           <span className={`connection-pill ${connection}`}><span className="status-dot" />{connected ? "연결됨" : connection === "reconnecting" ? "재연결 중" : waiting ? "승인 대기" : "연결 준비"}</span>
         </div>
         <div className="owner-area">
+          <ThemeToggle />
           <div className="pc-session"><span>{pcMode === "public" ? "공용 PC 사용 중" : "개인 PC"}</span><button type="button" onClick={() => void endPublicSession()}>사용 종료</button></div>
           <div className="avatar" aria-hidden="true">{initials}</div>
           <div className="owner-copy"><strong>{displayName}</strong><span>{email ? "Owner" : "소유자 전용"}</span></div>
@@ -1115,8 +1129,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               tabIndex={connected ? 0 : -1}
               role="application"
               aria-label="연결된 휴대폰 원격 화면"
-              onPointerDown={onPointerDown}
-              onPointerUp={onPointerUp}
+              onPointerDown={(event) => onPointerDown(event)}
+              onPointerMove={onPointerMove}
+              onPointerUp={(event) => onPointerUp(event)}
               onPointerCancel={onPointerCancel}
               onWheel={onRemoteWheel}
               onKeyDown={onPhoneKeyDown}
@@ -1146,7 +1161,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                   <div className="placeholder-orbit" aria-hidden="true"><span /></div>
                   <strong>{waiting ? "휴대폰 응답을 기다리는 중" : selectedDevice ? "휴대폰이 아직 연결되지 않았어요" : "아직 등록된 휴대폰이 없어요"}</strong>
                   <p>{waiting ? "휴대폰 알림을 확인해 주세요. 자동 연결 준비 상태라면 바로 연결됩니다." : selectedDevice ? "휴대폰의 연결 요청 알림을 켜두면 여기서 바로 요청할 수 있어요." : "전용 앱으로 기기를 등록하면 이곳에서 바로 보고 조작할 수 있어요."}</p>
-                  <button type="button" onClick={selectedDevice ? beginConnection : openPairing}>{selectedDevice ? "연결 시작" : "기기 등록하기"}</button>
+                  <button type="button" onClick={() => { if (selectedDevice) void beginConnection(); else openPairing(); }}>{selectedDevice ? "연결 시작" : "기기 등록하기"}</button>
                 </div>
               )}
             </div>
@@ -1161,22 +1176,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               tabIndex={connected ? 0 : -1}
               role="application"
               aria-label="분리된 휴대폰 원격 화면"
-              onPointerDown={(event) => {
-                if (!connected) return;
-                event.currentTarget.setPointerCapture(event.pointerId);
-                const point = normalizedPointer(event, detachedVideoRef.current);
-                if (!point.inside) return;
-                pointerStartRef.current = { ...point, at: event.timeStamp };
-              }}
-              onPointerUp={(event) => {
-                if (!connected || !pointerStartRef.current) return;
-                const start = pointerStartRef.current;
-                const end = normalizedPointer(event, detachedVideoRef.current);
-                pointerStartRef.current = null;
-                if (!end.inside) return;
-                sendPointerGesture(start, end, event.timeStamp);
-                detachedKeyboardRef.current?.focus({ preventScroll: true });
-              }}
+              onPointerDown={(event) => onPointerDown(event, detachedVideoRef.current)}
+              onPointerMove={onPointerMove}
+              onPointerUp={(event) => onPointerUp(event, detachedVideoRef.current)}
               onPointerCancel={onPointerCancel}
               onWheel={onRemoteWheel}
               onKeyDown={(event) => { handleDirectionKey(event); }}
@@ -1218,8 +1220,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           <section className="control-card connect-card">
             <p className="eyebrow">REMOTE CONTROL</p><h2>원격 제어</h2>
             <p>{connectionError ?? connectionHint ?? (waiting ? "휴대폰 응답을 기다리고 있어요." : connected ? "암호화된 연결을 사용하고 있어요." : selectedDevice ? "자동 연결 준비 상태이면 바로 연결됩니다. 그 외에는 휴대폰에서 승인해 주세요." : "먼저 휴대폰을 등록해 주세요.")}</p>
-            <button className="primary-action" type="button" onClick={selectedDevice ? beginConnection : openPairing} disabled={waiting || connection === "reconnecting"}>
-              {waiting || connection === "reconnecting" ? <><span className="spinner" /> {connection === "reconnecting" ? "재연결 중" : "연결하는 중"}</> : connected ? "연결 새로고침" : selectedDevice ? (connectionError ? "재연결" : "연결 시작") : "기기 등록"}
+            <button className="primary-action" type="button" onClick={() => { if (selectedDevice) void beginConnection(); else openPairing(); }} aria-busy={waiting || connection === "reconnecting"}>
+              {waiting || connection === "reconnecting" ? <><span className="spinner" /> {connection === "reconnecting" ? "재연결 중 · 다시 시도" : "승인 대기 · 다시 시도"}</> : connected ? "연결 새로고침" : selectedDevice ? (connectionError ? "재연결" : "연결 시작") : "기기 등록"}
             </button>
             <div className="device-row">
               <span className={`status-dot ${selectedDevice?.online ? "online" : ""}`} /><strong>{selectedDevice?.name ?? "등록된 기기 없음"}</strong>
