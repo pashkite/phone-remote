@@ -1,12 +1,14 @@
+import ThemeToggle from "./components/theme-toggle";
+
 export default function PublicConsole({ signInPath }: { signInPath: string }) {
   return (
     <main className="remote-shell">
       <header className="topbar">
         <div className="brand-lockup">
           <div className="orbit-mark" aria-hidden="true"><span /></div>
-          <div><h1>Galaxy Remote</h1><p>내 갤럭시를 어디서든 안전하게</p></div>
+          <div><h1>Galaxy Remote <span className="version-label">v0.5.2</span></h1></div>
         </div>
-        <a className="guest-login" href={signInPath} target="_top">로그인</a>
+        <div className="owner-area"><ThemeToggle /><a className="guest-login" href={signInPath} target="_top">로그인</a></div>
       </header>
       <section className="console-grid" aria-label="Galaxy Remote 시작 화면">
         <article className="screen-card">
@@ -19,6 +21,7 @@ export default function PublicConsole({ signInPath }: { signInPath: string }) {
                 <div className="placeholder-orbit" aria-hidden="true"><span /></div>
                 <strong>내 갤럭시를 PC에서</strong>
                 <p>화면을 보고 터치하고, 키보드로 입력하세요. 연결할 때 소유자 계정을 확인합니다.</p>
+                <span className="standby-badge">휴대폰 앱 등록 대기</span>
               </div>
             </div>
           </div>

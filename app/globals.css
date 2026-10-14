@@ -316,3 +316,77 @@ summary:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outl
 
 .shortcut-lines { display: grid; gap: 8px; margin-top: 12px; line-height: 1.6; }
 .shortcut-lines kbd { padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-soft); font: inherit; font-weight: 650; }
+
+/* Minimal neutral console, matching the supplied reference. */
+:root { color-scheme: dark; --page:#09090b; --surface:#101012; --surface-soft:#18181b; --ink:#fafafa; --muted:#a1a1aa; --line:#27272a; --primary:#fafafa; --primary-dark:#d4d4d8; --blue-soft:#27272a; }
+:root[data-theme="light"] { color-scheme:light; --page:#fcfcfd; --surface:#fff; --surface-soft:#f4f4f5; --ink:#18181b; --muted:#71717a; --line:#e4e4e7; --primary:#18181b; --primary-dark:#3f3f46; --blue-soft:#f4f4f5; }
+body { background:var(--page); }
+.remote-shell { padding:0 24px 48px; }
+.topbar { max-width:1152px; height:64px; border-bottom:1px solid var(--line); gap:16px; }
+.brand-lockup { gap:10px; }
+.brand-lockup h1 { font-size:14px; font-weight:650; letter-spacing:-.025em; display:flex; align-items:center; gap:8px; }
+.version-label { color:var(--muted); font:10px ui-monospace, monospace; font-weight:400; }
+.orbit-mark { width:28px; height:28px; border:0; border-radius:7px; transform:none; background:var(--ink); flex-shrink:0; }
+.orbit-mark::before { inset:6px 9px; height:auto; border:1.5px solid var(--page); border-radius:2px; background:none; }
+.orbit-mark span { display:none; }
+.owner-area { gap:8px; }
+.theme-toggle { width:32px; height:32px; border:0; border-radius:7px; background:transparent; color:var(--muted); font-size:20px; cursor:pointer; }
+.theme-toggle:hover { color:var(--ink); background:var(--surface-soft); }
+.guest-login { padding:7px 12px; border-radius:7px; font-size:12px; background:var(--ink); color:var(--page); }
+.console-grid { max-width:1152px; min-height:0; grid-template-columns:minmax(0,7fr) minmax(0,5fr); gap:32px; margin:32px auto 0; }
+.screen-card { min-height:0; padding:0; background:none; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; }
+.card-heading { gap:12px; }
+.card-heading h2 { font-size:16px; }
+.eyebrow { color:var(--muted); font-size:9px; font-weight:600; letter-spacing:.12em; }
+.screen-stage { min-height:0; padding:24px 0 16px; }
+.phone-view { width:min(390px,100%); min-width:0; border:8px solid var(--surface-soft); border-radius:24px; background:var(--surface); box-shadow:0 0 0 1px var(--line),0 4px 14px #00000012; transition:none; }
+.phone-view.is-landscape { width:100%; border-radius:20px; }
+.phone-view::before { display:none; }
+.phone-view video { background:#000; display:block; }
+.phone-view.is-live,.detached-phone-view.is-live { touch-action:none; user-select:none; cursor:crosshair; }
+.screen-placeholder { padding:28px; background:var(--surface); color:var(--ink); }
+.screen-placeholder::before,.screen-placeholder::after { display:none; }
+.placeholder-orbit { width:48px; height:48px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); transform:none; margin-bottom:20px; }
+.placeholder-orbit::before { left:17px; right:17px; top:12px; height:24px; border:1.5px solid var(--muted); border-radius:3px; background:none; }
+.placeholder-orbit span { display:none; }
+.screen-placeholder strong { font-size:18px; font-weight:600; }
+.screen-placeholder p { font-size:12px; line-height:1.8; color:var(--muted); margin:12px 0; }
+.screen-placeholder button { background:var(--ink); color:var(--page); border:0; border-radius:8px; padding:10px 16px; font-size:12px; box-shadow:none; }
+.standby-badge { margin-top:12px; padding:5px 10px; border:1px solid var(--line); border-radius:99px; color:var(--muted); font-size:10px; }
+.control-rail { gap:16px; }
+.control-card,.privacy-note { padding:24px; border-radius:16px; border:1px solid var(--line); background:var(--surface); box-shadow:0 1px 3px #00000005; backdrop-filter:none; }
+.connect-card h2 { font-size:23px; font-weight:600; margin-top:9px; }
+.connect-card > p:not(.eyebrow) { font-size:13px; line-height:1.75; margin:12px 0 20px; }
+.primary-action,.pair-actions .primary-action { height:44px; border-radius:8px; background:var(--ink); color:var(--page); box-shadow:none; font-size:13px; font-weight:600; }
+.primary-action:hover:not(:disabled) { background:var(--primary-dark); transform:none; }
+.primary-action:active:not(:disabled) { transform:none; }
+.screen-help { color:var(--muted); font-size:11px; line-height:1.7; }
+.connection-pill { height:26px; border-radius:6px; margin-left:6px; padding:0 8px; font-size:10px; }
+.connection-pill,.live-badge,.device-row,.quality-select,.viewer-button,.device-select,.display-settings summary,.display-settings-panel,.pc-session button,.icon-button,.quick-grid button,.volume-card button,.modal,.registered-device,.pc-mode-picker button,.pair-code-panel,.android-project-link,.remote-tools,.remote-tools button,.remote-tools input,.remote-tools textarea,.remote-tools select,.remote-tools-tab,.tools-panel { border-color:var(--line); background:var(--surface); color:var(--ink); box-shadow:none; }
+input,select,textarea { color:var(--ink); }
+.quick-grid button:hover:not(:disabled),.viewer-button:hover,.viewer-button[aria-pressed="true"] { border-color:var(--muted); color:var(--ink); background:var(--surface-soft); }
+.device-select,.viewer-button,.quality-select,.display-settings summary { height:34px; min-height:34px; padding:7px 10px; border-radius:7px; font-size:11px; }
+.device-row { margin-top:14px; }
+.icon-button { width:32px; height:32px; border-radius:7px; margin-left:0; }
+.avatar { width:28px; height:28px; font-size:11px; background:var(--ink); color:var(--page); box-shadow:none; }
+.owner-copy strong,.pc-session { font-size:11px; }
+.owner-copy span { font-size:10px; }
+.pc-session button { min-height:30px; padding:0 8px; font-size:11px; }
+.privacy-note { align-items:flex-start; }
+.privacy-note p,.guest-description { font-size:12px; line-height:1.7; }
+.shield { background:var(--surface-soft); color:var(--muted); }
+.shortcut-lines { line-height:2; }
+.shortcut-lines kbd { border:1px solid var(--line); background:var(--surface-soft); color:var(--ink); }
+.android-project-link { border:1px solid var(--line); border-radius:9px; }
+.android-project-link strong { font-size:12px; }
+.android-project-link small { color:var(--muted); font-size:10px; }
+@media(max-width:880px) { .console-grid { grid-template-columns:1fr; max-width:600px; gap:24px; } .phone-view { width:min(360px,100%); } }
+@media(max-width:600px) { .remote-shell { padding:0 16px 32px; } .topbar { height:56px; } .console-grid { margin-top:24px; } .connection-pill { display:none; } .pc-session span,.owner-copy { display:none; } .brand-lockup h1 { font-size:13px; } .version-label { font-size:9px; } .control-card,.privacy-note { padding:20px; } }
+.privacy-note strong { color:var(--ink); }
+.privacy-note p { color:var(--muted); }
+.modal-close,.modal-actions button,.registered-device button,.pc-mode-picker label,.pairing-phone,.pairing-browser { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
+.pc-mode-picker label.active { color:var(--ink); background:var(--surface-soft); border-color:var(--muted); }
+.android-project-link > span,.modal-note span { color:var(--page); background:var(--ink); }
+.android-project-link:hover { border-color:var(--muted); background:var(--surface-soft); transform:none; }
+.remote-tools details,.file-drop { border-color:var(--line); }
+.file-drop,.remote-tools pre { background:var(--surface-soft); color:var(--ink); }
