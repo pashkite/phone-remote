@@ -24,7 +24,7 @@ export class RemoteClient {
   opened() { this.diagnostics.record("channel", { state: "open" }); }
   private raw(payload: Record<string, unknown>) { if (this.channel.readyState !== "open" || this.channel.bufferedAmount > 262144) return false; try { this.channel.send(JSON.stringify(payload)); return true; } catch { return false; } }
   supports(feature: string) { return this.state.features.includes(feature); }
-  sendTouch(payload: Record<string, unknown>) { return this.supports("liveTouch") && this.channel.bufferedAmount <= 8192 && this.raw(payload); }
+  sendTouch(payload: Record<string, unknown>) { return this.supports("liveTouch") && this.channel.bufferedAmount <= 2048 && this.raw(payload); }
   send(payload: Record<string, unknown>) {
     if (!this.state.features.includes("commandAck")) return this.raw(payload);
     if (this.pending.size >= 256) { this.update({ result: "명령 응답이 밀리고 있습니다. 잠시 기다려 주세요." }); return false; }

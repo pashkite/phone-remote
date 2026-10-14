@@ -946,6 +946,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     event.currentTarget.setPointerCapture(event.pointerId);
     pointerStartRef.current = { ...point, at: event.timeStamp, pointerId: event.pointerId,
       target: event.currentTarget, clientX: event.clientX, clientY: event.clientY, moved: false };
+  }
+
+  function startLivePointer(event: React.PointerEvent<HTMLDivElement>, start: {x:number;y:number}, point: {x:number;y:number}) {
     const client = toolsRef.current;
     const owner = event.currentTarget.ownerDocument.defaultView;
     if (client?.supports("liveTouch") && owner) {
@@ -959,8 +962,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       };
       const visibility = () => { if (target.ownerDocument.hidden) cancel(); };
       const cleanup = () => { owner.removeEventListener("blur", cancel); owner.removeEventListener("pagehide", cancel); target.ownerDocument.removeEventListener("visibilitychange", visibility); };
-      const sender = new LiveTouchSender(packet => client.sendTouch(packet), owner, point, crypto.randomUUID(), cancel);
+      const sender = new LiveTouchSender(packet => client.sendTouch(packet), owner, { x: start.x, y: start.y }, crypto.randomUUID(), cancel);
       if (!sender.started) { cancel(); setToast("터치를 보내지 못했어요. 연결을 확인해 주세요."); return; }
+      sender.move(point);
       livePointerRef.current = { sender, cleanup };
       owner.addEventListener("blur", cancel);
       owner.addEventListener("pagehide", cancel);
@@ -971,8 +975,11 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
     const start = pointerStartRef.current;
     if (!start || start.pointerId !== event.pointerId || start.target !== event.currentTarget) return;
-    livePointerRef.current?.sender.move(normalizedPointer(event, targetVideo));
-    if (Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) >= 6) start.moved = true;
+    const point = normalizedPointer(event, targetVideo);
+    if (!start.moved && Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) >= 8) {
+      start.moved = true;
+      startLivePointer(event, start, point);
+    } else livePointerRef.current?.sender.move(point);
   }
 
   function onPointerUp(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
@@ -989,7 +996,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       (targetVideo ? detachedKeyboardRef : keyboardRef).current?.focus({ preventScroll: true });
       return;
     }
-    const moved = start.moved || Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) >= 6;
+    const moved = start.moved || Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) >= 8;
     const durationMs = Math.min(1200, Math.max(60, event.timeStamp - start.at));
     // Clamp releases outside the image to its edge instead of dropping the drag.
     if (moved) sendPayload({ type: "swipe", fromX: start.x, fromY: start.y, toX: end.x, toY: end.y, durationMs: Math.min(400, durationMs) });
@@ -1157,6 +1164,12 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 <option value={75}>투명도 75%</option>
                 <option value={100}>투명도 100%</option>
               </select></label></div></details>
+              <button className="viewer-button" type="button" title="화질을 낮추고 화면 갱신을 늘려 반응 속도를 우선합니다." onClick={() => {
+                resolutionRef.current = 540; frameRateRef.current = 60;
+                setResolution(540); setFrameRate(60);
+                if (connected) sendPayload({ type: "quality", shortEdge: 540, fps: 60 });
+                setToast("반응 속도 우선 설정을 선택했어요.");
+              }}>반응 속도 우선</button>
               <button className="viewer-button" type="button" aria-pressed={Boolean(detachedWindow)} onClick={() => void toggleDetachedScreen()}>
                 {detachedWindow ? "화면 창 닫기" : "화면 분리"}
               </button>
