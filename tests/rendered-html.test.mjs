@@ -42,4 +42,17 @@ test("production console preserves owner access and removes temporary preview me
   assert.match(html, /기기 등록/);
   const denied = await worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html", "oai-authenticated-user-email": "not-owner@local.test" } }), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
   assert.match(await denied.text(), /접근 권한이 없는 계정입니다/);
+  const env = { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } };
+  const ctx = { waitUntil() {}, passThroughOnException() {} };
+  const guest = await worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }), env, ctx);
+  assert.equal(guest.status, 200);
+  assert.equal(guest.headers.get("location"), null);
+  const guestHtml = await guest.text();
+  assert.match(guestHtml, /로그인하여 연결/);
+  assert.match(guestHtml, /signin-with-chatgpt\?return_to=%2F/);
+  assert.doesNotMatch(guestHtml, new RegExp(ownerEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const [path, method] of [["/api/devices", "GET"], ["/api/sessions", "POST"], ["/api/pairing/start", "POST"], ["/api/ice", "GET"]]) {
+    const result = await worker.fetch(new Request(`http://localhost${path}`, { method }), env, ctx);
+    assert.equal(result.status, 401, `${method} ${path} must require authentication`);
+  }
 });
