@@ -8,7 +8,7 @@
 - 기준 커밋: `2b60ee1bbe166d70c5774502a1ed4fd5ec95c805`
 - 결과 브랜치: `feature/linro-reference-ui-redesign`
 - 기존 7단계 [PR #8](https://github.com/pashkite/phone-remote/pull/8): Git의 `refs/pull/8/head`가 위 기준 커밋과 정확히 일치함을 확인했다. API 조회·생성은 `Forbidden`이었지만, 이후 Git 참조에서 기존 PR을 발견하여 중복 생성하지 않았다. 열림·종료·병합 여부는 API 제한으로 미확인이다.
-- [이번 작업 비교·PR 생성 링크](https://github.com/pashkite/phone-remote/compare/feature/linro-device-test-preparation...feature/linro-reference-ui-redesign?expand=1). API로 새 PR을 생성하지 못하면 이 링크를 사용한다.
+- [이번 작업 비교·PR 생성 링크](https://github.com/pashkite/phone-remote/compare/feature/linro-device-test-preparation...feature/linro-reference-ui-redesign?expand=1). 브랜치 푸시 후 새 PR 생성도 시도했으나 GitHub GraphQL API가 `Forbidden`을 반환했다. **새 PR 생성 완료는 확인하지 못했으며** 이 링크에서 접근 권한이 있는 사용자가 생성할 수 있다. 실패 기록은 `assets/stage7-5/new-pr-api.log`에 보관했다.
 - `main`, `master`, 기준 개발 브랜치, 운영 환경·DB·도메인은 변경 대상이 아니다. 병합·자동 배포를 수행하지 않았다.
 
 ## 1. 참고 이미지 분석과 적용 범위
@@ -121,6 +121,8 @@
 | 연결 생명주기 | 최종 PASS: 지연 응답 취소·다른 기기 선택 종료·인증 만료·100회 연결·30초 실제 시간 독서 soak |
 | 네이티브 WebRTC | **BLOCKED/timeout**, 관리형 Chromium `disable_non_proxied_udp`, ICE/Peer new·수신 프레임 0. 우회하지 않음 |
 | Android 런타임·실기기 | **미검증**, 연결 기기/에뮬레이터 없음. 스크린샷도 없음 |
+
+기존 Android 16 LiveTouch 드래그와 새 `MainUiTest`도 instrumentation APK에 포함해 컴파일했다. 런타임 성공이나 원격 GitHub Actions 성공으로 표시하지 않았고 기존 드래그 assertion을 완화하지 않았다.
 
 기존 테스트를 삭제하거나 skip 처리하지 않았다. 레이아웃에서 바뀐 등록 버튼·기기 선택 카드·줄바꿈에 맞춘 탐색자만 갱신했고, 프로토콜/준비 상태 기대값과 리소스 검사 임계값은 유지했다. 빌드 marker는 웹/APK 모두 `linro-reference-ui-stage7-5`, control protocol은 기존 **1**이다. 새 marker 비교는 진단이며 기존 기기 등록 프로토콜을 대체하지 않는다.
 

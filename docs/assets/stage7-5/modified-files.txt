@@ -65,6 +65,7 @@ docs/assets/stage7-5/listener-probe.log
 docs/assets/stage7-5/modified-files.txt
 docs/assets/stage7-5/native.log
 docs/assets/stage7-5/network.log
+docs/assets/stage7-5/new-pr-api.log
 docs/assets/stage7-5/player-proportion-comparison.png
 docs/assets/stage7-5/pr-api.log
 docs/assets/stage7-5/preparation.log
@@ -108,6 +109,7 @@ docs/assets/stage7-5/reference-ui/pair-dialog.png
 docs/assets/stage7-5/reference-ui/results.json
 docs/assets/stage7-5/reference-ui/tools-actions.png
 docs/assets/stage7-5/reference-ui/waiting-1440-dark.png
+docs/assets/stage7-5/remote-refs-after-push.txt
 docs/assets/stage7-5/stage75-connection-info/connection-info.png
 docs/assets/stage7-5/stage75-connection-info/linro-icons-and-masks.png
 docs/assets/stage7-5/stage75-connection-info/mismatched-build.png

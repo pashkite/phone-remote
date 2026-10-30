@@ -1,0 +1,14 @@
+3f853b455594d14e26565e789dbc56124c4bae10	refs/heads/assets/linro-brand-reference
+b4a35e622aee65348da65c2989cd331771cbfa14	refs/heads/feature/galaxy-remote-2-integration-qa
+2b60ee1bbe166d70c5774502a1ed4fd5ec95c805	refs/heads/feature/linro-device-test-preparation
+ddffafe0b4ea342c963d0bccbf5ec5b5efb5cd9b	refs/heads/feature/linro-reference-ui-redesign
+cb9666b42d1bc3a2cc241097e7014d228f35c4d5	refs/heads/main
+e3025397a344cfdc197f78637b88ae88e274ab37	refs/heads/master
+4ffff93b39ef09fd78a28c397cd9e2b5300bacb9	refs/pull/1/head
+f5ddc0831b9c66ef1ca42f892a7b4adffcfe9f2b	refs/pull/2/head
+2325b90df1054fef28cbead372b478931cd3fbbc	refs/pull/3/head
+7a235b9bb03febe0ee5eb9367b355951b4c5de3e	refs/pull/4/head
+82dc473d0c9e3dd8541817295a60ee9ab993e66d	refs/pull/5/head
+01bf4c2b557a8cc93dc1471a953db492d32fd46c	refs/pull/6/head
+dd4841ec42b49dd08b3f22a9b944813fb21ee2f0	refs/pull/7/head
+2b60ee1bbe166d70c5774502a1ed4fd5ec95c805	refs/pull/8/head
