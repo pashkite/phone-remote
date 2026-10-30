@@ -2,6 +2,8 @@
 
 [Linro-stage7-arm64-paneltest.apk 다운로드 페이지](https://github.com/pashkite/phone-remote/blob/feature/linro-device-test-preparation/qa-artifacts/stage7/Linro-stage7-arm64-paneltest.apk)에서 **Download raw file**을 선택하세요. 비공개 저장소라면 GitHub 로그인이 필요합니다.
 
+비로그인 직접 다운로드 점검은 HTTP 404였고 공개 여부 조회 API도 Forbidden이었습니다. 비로그인 공개 다운로드는 미검증이므로 저장소 접근 권한이 있는 계정으로 로그인해 위 파일 페이지를 이용하세요. 파일은 해당 원격 브랜치에 커밋·푸시했습니다.
+
 - 런처 이름: **린로**. 아이콘에 **BETA** 표시.
 - 패키지: `com.galaxyremote.app.paneltest`, ABI: arm64-v8a.
 - versionCode **18** (6단계 17보다 증가), versionName 0.5.3.

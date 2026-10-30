@@ -55,7 +55,7 @@ Android는 기존 두 origin만 canonical HTTPS로 허용하고, 등록 요청 �
 
 [APK 직접 다운로드](https://github.com/pashkite/phone-remote/raw/refs/heads/feature/linro-device-test-preparation/qa-artifacts/stage7/Linro-stage7-arm64-paneltest.apk) · [GitHub 파일 페이지](https://github.com/pashkite/phone-remote/blob/feature/linro-device-test-preparation/qa-artifacts/stage7/Linro-stage7-arm64-paneltest.apk) · [검사 JSON](../qa-artifacts/stage7/apk-info.json) · [SHA256SUMS](../qa-artifacts/stage7/SHA256SUMS.txt)
 
-비공개 저장소라면 로그인 후 파일 페이지에서 **Download raw file**을 사용한다.
+비공개 저장소라면 로그인 후 파일 페이지에서 **Download raw file**을 사용한다. 푸시 후 비로그인 직접 다운로드 점검은 HTTP 404였으며, 저장소 공개 여부를 확인하는 GitHub API도 `Forbidden`이었다. 따라서 비로그인 공개 다운로드 성공은 미검증이다. GitHub에 저장소 접근 권한이 있는 계정으로 로그인하여 파일 페이지를 이용한다. APK는 해당 원격 브랜치에 커밋·푸시했다.
 
 | 항목 | 결과 |
 |---|---|
