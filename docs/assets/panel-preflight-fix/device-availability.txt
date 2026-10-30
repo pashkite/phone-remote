@@ -1,0 +1,1 @@
+adb devices -l: no connected Android device. No physical panel OFF/ON, recovery command, installation or Shizuku runtime test was executed.
