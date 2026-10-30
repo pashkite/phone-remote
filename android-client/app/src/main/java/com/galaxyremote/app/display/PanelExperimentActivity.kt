@@ -35,7 +35,7 @@ class PanelExperimentActivity : Activity() {
             setPadding(dp(20), dp(20), dp(20), dp(24))
         }
         val scroll = ScrollView(this).apply {
-            setBackgroundColor(getColor(R.color.page)); clipToPadding = false; addView(column)
+            setBackgroundColor(getColor(R.color.page)); clipToPadding = true; addView(column)
         }
         setContentView(scroll)
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
