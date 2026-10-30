@@ -63,7 +63,7 @@ class RemoteControlService : Service() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        webRtcSession?.setQuality(1080, 30)
+        webRtcSession?.refreshCapture()
     }
 
     override fun onDestroy() {

@@ -122,7 +122,8 @@ class ProjectionSmokeTest {
         private const val CONSENT_ATTEMPTS = 3
         private const val CONSENT_TIMEOUT_MS = 45_000L
         private const val COORDINATE_FALLBACK_DELAY_MS = 18_000L
-        private const val RESULT_TIMEOUT_MS = 50_000L
+        // Two peer negotiations, three live quality changes and final cleanup.
+        private const val RESULT_TIMEOUT_MS = 100_000L
         private val POSITIVE_BUTTON_FRACTIONS = listOf(
             0.76 to 0.70,
             0.82 to 0.70,

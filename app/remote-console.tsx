@@ -8,12 +8,13 @@ import RemoteTools from "./components/remote-tools";
 import { LiveTouchSender } from "../lib/remote/live-touch";
 import { RemoteClient } from "../lib/remote/client";
 import { Diagnostics } from "../lib/remote/diagnostics";
+import { AdaptiveQuality, EMPTY_VIDEO_METRICS, QUALITY_PRESETS, VideoStatsSampler, needsVp8Fallback, preferredCodecs, requestLowBuffer, type QualityMode, type VideoMetrics, type SenderMetrics } from "../lib/remote/streaming";
 import { resolveShortcut } from "../lib/remote/shortcuts";
 
 type ConnectionState = "offline" | "waiting" | "reconnecting" | "connected";
 type PcMode = "personal" | "public";
 type DialogState = "pair" | "disconnect" | "settings" | null;
-type ResolutionSetting = 540 | 1080 | 1440;
+type ResolutionSetting = 540 | 720 | 1080 | 1440;
 type FrameRateSetting = 24 | 30 | 60;
 
 type RemoteConsoleProps = {
@@ -40,15 +41,7 @@ type PairingInfo = {
   expiresAt: number;
 };
 
-type ConnectionMetrics = {
-  latency: number | null;
-  width: number | null;
-  height: number | null;
-  fps: number | null;
-  bitrateKbps: number | null;
-  packetLoss: number | null;
-  path: "direct" | "turn" | null;
-};
+type ConnectionMetrics = VideoMetrics;
 
 const MINIMUM_NOTIFICATION_APP_VERSION = [0, 2, 0] as const;
 
@@ -100,15 +93,14 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [detachedWindow, setDetachedWindow] = useState<Window | null>(null);
   const [videoAspectRatio, setVideoAspectRatio] = useState(9 / 19.5);
-  const [metrics, setMetrics] = useState<ConnectionMetrics>({
-    latency: null,
-    width: null,
-    height: null,
-    fps: null,
-    bitrateKbps: null,
-    packetLoss: null,
-    path: null,
-  });
+  const [metrics, setMetrics] = useState<ConnectionMetrics>({ ...EMPTY_VIDEO_METRICS });
+  const [senderMetrics, setSenderMetrics] = useState<SenderMetrics | null>(null);
+  const [qualityMode, setQualityMode] = useState<QualityMode>("balanced");
+  const modeRef = useRef<QualityMode>("balanced");
+  const adaptiveRef = useRef(new AdaptiveQuality());
+  const [codecMode, setCodecMode] = useState("vp8");
+  const codecRef = useRef("vp8");
+  const codecFallbackRef = useRef(false);
   const [diagnostics] = useState(() => new Diagnostics());
   const [toast, setToast] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -302,6 +294,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     const sessionId = sessionIdRef.current;
     sessionIdRef.current = null;
     if (channelRef.current) {
+      channelRef.current.onopen = null;
       channelRef.current.onclose = null;
       channelRef.current.close();
     }
@@ -322,15 +315,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     setConnectionHint(null);
     remoteCandidateIdsRef.current.clear();
     previousStatsRef.current = null;
-    setMetrics({
-      latency: null,
-      width: null,
-      height: null,
-      fps: null,
-      bitrateKbps: null,
-      packetLoss: null,
-      path: null,
-    });
+    setMetrics({ ...EMPTY_VIDEO_METRICS });
+    setSenderMetrics(null);
     if (notifyServer && sessionId) {
       await fetch(`/api/sessions/${sessionId}`, { method: "DELETE", keepalive: true }).catch(() => {
         // Local media and control resources are already closed even if the
@@ -501,67 +487,48 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }, [connected, dialog, detachedWindow]);
 
   function startStats(peer: RTCPeerConnection) {
+    if (peerRef.current !== peer) return;
     if (statsTimerRef.current) window.clearInterval(statsTimerRef.current);
+    const sampler = new VideoStatsSampler();
+    adaptiveRef.current.reset();
+    let polling = false;
+    const startedAt = performance.now();
+    if (modeRef.current === "auto") {
+      resolutionRef.current = 1080; frameRateRef.current = 30;
+      setResolution(1080); setFrameRate(30);
+      sendPayload({ type: "quality", shortEdge: 1080, fps: 30 });
+    }
     statsTimerRef.current = window.setInterval(async () => {
+      if (polling || peerRef.current !== peer) return;
+      polling = true;
       try {
         const report = await peer.getStats();
-        let latency: number | null = null;
-        let width: number | null = null;
-        let height: number | null = null;
-        let fps: number | null = null;
-        let bytes: number | null = null;
-        let packetsLost: number | null = null;
-        let packetsReceived: number | null = null;
-        let selectedPair: RTCStats | null = null;
-        report.forEach((stat) => {
-          if (
-            stat.type === "candidate-pair" &&
-            stat.state === "succeeded" &&
-            (stat.selected === true || stat.nominated === true)
-          ) {
-            selectedPair = stat;
-          }
-          if (stat.type === "transport" && typeof stat.selectedCandidatePairId === "string") {
-            selectedPair = report.get(stat.selectedCandidatePairId) ?? selectedPair;
-          }
-          if (stat.type === "candidate-pair" && stat.state === "succeeded" && typeof stat.currentRoundTripTime === "number") {
-            latency = Math.round(stat.currentRoundTripTime * 1_000);
-          }
-          if (stat.type === "inbound-rtp" && stat.kind === "video" && typeof stat.frameHeight === "number") {
-            width = typeof stat.frameWidth === "number" ? stat.frameWidth : null;
-            height = stat.frameHeight;
-            fps = typeof stat.framesPerSecond === "number" ? Math.round(stat.framesPerSecond) : null;
-            bytes = typeof stat.bytesReceived === "number" ? stat.bytesReceived : null;
-            packetsLost = typeof stat.packetsLost === "number" ? stat.packetsLost : null;
-            packetsReceived = typeof stat.packetsReceived === "number" ? stat.packetsReceived : null;
-          }
-        });
-        let path: ConnectionMetrics["path"] = null;
-        if (selectedPair) {
-          const pair = selectedPair as RTCStats & { localCandidateId?: string; remoteCandidateId?: string; currentRoundTripTime?: number };
-          const local = pair.localCandidateId ? report.get(pair.localCandidateId) : null;
-          const remote = pair.remoteCandidateId ? report.get(pair.remoteCandidateId) : null;
-          path = local?.candidateType === "relay" || remote?.candidateType === "relay" ? "turn" : "direct";
-          if (latency === null && typeof pair.currentRoundTripTime === "number") {
-            latency = Math.round(pair.currentRoundTripTime * 1_000);
+        if (peerRef.current !== peer) return;
+        const now = performance.now();
+        const values: (Record<string, unknown> & { id: string; type: string })[] = [];
+        report.forEach(stat => values.push(stat));
+        const measured = sampler.sample(values, now, channelRef.current?.bufferedAmount ?? 0);
+        setMetrics(measured);
+        if (needsVp8Fallback(codecRef.current === "h264", codecFallbackRef.current, now - startedAt,
+          measured.width ?? videoRef.current?.videoWidth ?? 0, measured.decodedFrames)) {
+          queueReconnect("첫 영상 프레임을 받지 못해 VP8로 다시 시도합니다.");
+          return;
+        }
+        const sender = toolsRef.current?.senderMetrics ?? null;
+        const fresh = sender && now - sender.at < 6000 ? sender : null;
+        setSenderMetrics(fresh);
+        toolsRef.current?.diagnostics.record("metrics", measured);
+        if (fresh) toolsRef.current?.diagnostics.record("sender", fresh);
+        if (modeRef.current === "auto" && !document.hidden) {
+          const next = adaptiveRef.current.update(measured, fresh, now, toolsRef.current?.supports("quality720") === true);
+          if (next && sendPayload({ type: "quality", shortEdge: next.edge, fps: next.fps })) {
+            resolutionRef.current = next.edge; frameRateRef.current = next.fps;
+            setResolution(next.edge); setFrameRate(next.fps);
           }
         }
-        const now = performance.now();
-        const previous = previousStatsRef.current;
-        const bitrateKbps = bytes !== null && previous && now > previous.at
-          ? Math.max(0, Math.round(((bytes - previous.bytes) * 8) / (now - previous.at)))
-          : null;
-        if (bytes !== null) previousStatsRef.current = { bytes, at: now };
-        const packetTotal = (packetsReceived ?? 0) + Math.max(0, packetsLost ?? 0);
-        const packetLoss = packetTotal > 0 && packetsLost !== null
-          ? Math.round((Math.max(0, packetsLost) / packetTotal) * 1_000) / 10
-          : null;
-        setMetrics({ latency, width, height, fps, bitrateKbps, packetLoss, path });
-        toolsRef.current?.diagnostics.record("metrics", { latency, width, height, fps, bitrateKbps, packetLoss, path });
-      } catch {
-        // A transient stats failure should not interrupt the remote session.
-      }
-    }, 1_000);
+      } catch { /* Optional stats must not tear down an otherwise valid session. */ }
+      finally { polling = false; }
+    }, 1000);
   }
 
   async function beginConnection() {
@@ -592,6 +559,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       setConnectionError(null);
       setConnectionHint("휴대폰으로 승인 알림을 보내는 중이에요.");
 
+      let codecNegotiationFailed = false;
       try {
         const [sessionResponse, iceResponse] = await Promise.all([
           fetch("/api/sessions", {
@@ -617,13 +585,14 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         peerRef.current = peer;
         const videoTransceiver = peer.addTransceiver("video", { direction: "recvonly" });
         const videoCapabilities = RTCRtpReceiver.getCapabilities?.("video");
-        const vp8Codecs = videoCapabilities?.codecs.filter(
-          (codec) => codec.mimeType.toLowerCase() === "video/vp8",
-        );
-        if (vp8Codecs?.length && "setCodecPreferences" in videoTransceiver) {
-          videoTransceiver.setCodecPreferences(vp8Codecs);
+        const codecs = preferredCodecs(videoCapabilities?.codecs ?? [], codecRef.current === "h264" && !codecFallbackRef.current);
+        if (codecs.length && "setCodecPreferences" in videoTransceiver) {
+          try { videoTransceiver.setCodecPreferences(codecs); }
+          catch (error) { codecNegotiationFailed = true; throw error; }
         }
+        requestLowBuffer(videoTransceiver.receiver);
         peer.ontrack = (event) => {
+          if (peerRef.current !== peer || sessionIdRef.current !== sessionId) return;
           const stream = event.streams[0] ?? new MediaStream([event.track]);
           remoteStreamRef.current = stream;
           if (videoRef.current && videoRef.current.srcObject !== stream) videoRef.current.srcObject = stream;
@@ -635,6 +604,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           }
         };
         peer.onicecandidate = (event) => {
+          if (peerRef.current !== peer || sessionIdRef.current !== sessionId) return;
           const candidate = event.candidate;
           if (!candidate) return;
           const payload = candidate.toJSON();
@@ -651,6 +621,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           });
         };
         peer.onconnectionstatechange = () => {
+          if (peerRef.current !== peer || sessionIdRef.current !== sessionId) return;
           if (peer.connectionState === "connected") {
             if (answerPollRef.current) window.clearInterval(answerPollRef.current);
             answerPollRef.current = null;
@@ -675,6 +646,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         toolsRef.current = tools;
         setToolsClient(tools);
         channel.onopen = () => {
+          if (peerRef.current !== peer || sessionIdRef.current !== sessionId) return;
           tools.opened();
           setConnection("connected");
           setConnectionError(null);
@@ -685,14 +657,17 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           startStats(peer);
         };
         channel.onclose = () => {
+          if (peerRef.current !== peer || sessionIdRef.current !== sessionId) return;
           if (peer.connectionState !== "closed" && !intentionalCloseRef.current) {
             queueReconnect("원격 조작 채널이 닫혔습니다.");
           }
         };
 
 
-        const offer = await peer.createOffer({ offerToReceiveAudio: false });
-        await peer.setLocalDescription(offer);
+        try {
+          const offer = await peer.createOffer({ offerToReceiveAudio: false });
+          await peer.setLocalDescription(offer);
+        } catch (error) { codecNegotiationFailed = true; throw error; }
         if (!peer.localDescription) throw new Error("연결 요청을 완성하지 못했습니다.");
 
         const offerResponse = await fetch(`/api/sessions/${sessionId}/offer`, {
@@ -739,7 +714,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             if (state === "rejected") throw new Error("휴대폰에서 연결 요청을 거절했습니다.");
             if (state === "closed") throw new Error("연결 요청이 닫혔습니다.");
             if (payload.session?.answerType === "answer" && payload.session.answerSdp && !peer.currentRemoteDescription) {
-              await peer.setRemoteDescription({ type: "answer", sdp: payload.session.answerSdp });
+              try { await peer.setRemoteDescription({ type: "answer", sdp: payload.session.answerSdp }); }
+              catch (error) { codecNegotiationFailed = true; throw error; }
             }
             if (peer.currentRemoteDescription) {
               for (const candidate of payload.candidates ?? []) {
@@ -764,7 +740,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             if (answerPollRef.current) window.clearInterval(answerPollRef.current);
             answerPollRef.current = null;
             setConnectionError(error instanceof Error ? error.message : "연결하지 못했습니다.");
-            void closeConnection();
+            if (codecNegotiationFailed && codecRef.current === "h264" && !codecFallbackRef.current) queueReconnect("코덱 협상을 VP8로 다시 시도합니다.");
+            else void closeConnection();
           } finally {
             polling = false;
           }
@@ -773,7 +750,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         void pollAnswer();
       } catch (error) {
         setConnectionError(error instanceof Error ? error.message : "연결을 시작하지 못했습니다.");
-        await closeConnection();
+        if (codecNegotiationFailed && codecRef.current === "h264" && !codecFallbackRef.current) queueReconnect("코덱 협상을 VP8로 다시 시도합니다.");
+        else await closeConnection();
       }
 
     } finally { connectionStartingRef.current = false; }
@@ -781,6 +759,10 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
   function queueReconnect(reason: string) {
     if (intentionalCloseRef.current || reconnectTimerRef.current) return;
+    if (codecRef.current === "h264" && !codecFallbackRef.current) {
+      codecFallbackRef.current = true;
+      setToast("연결 복구는 VP8 기준선으로 다시 시도합니다.");
+    }
     const attempt = reconnectAttemptsRef.current + 1;
     reconnectAttemptsRef.current = attempt;
     if (attempt > 4) {
@@ -820,16 +802,20 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }
 
   function changeResolution(next: ResolutionSetting) {
+    modeRef.current = "custom"; setQualityMode("custom");
+    if (next === 1440 && frameRateRef.current === 60) { frameRateRef.current = 30; setFrameRate(30); }
     resolutionRef.current = next;
     setResolution(next);
     if (connected) {
-      if (sendPayload({ type: "quality", shortEdge: next, fps: frameRate })) {
+      if (sendPayload({ type: "quality", shortEdge: next, fps: next === 1440 ? Math.min(frameRate, 30) : frameRate })) {
         setToast("휴대폰에서 해상도를 적용하는 중이에요.");
       }
     }
   }
 
   function changeFrameRate(next: FrameRateSetting) {
+    modeRef.current = "custom"; setQualityMode("custom");
+    if (resolution === 1440 && next === 60) next = 30;
     frameRateRef.current = next;
     setFrameRate(next);
     if (connected) {
@@ -927,6 +913,14 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     }
   }
 
+  useEffect(() => {
+    livePointerRef.current?.sender.finish("cancel");
+    livePointerRef.current?.cleanup();
+    livePointerRef.current = null;
+    const held = pointerStartRef.current; pointerStartRef.current = null;
+    if (held?.target.hasPointerCapture(held.pointerId)) held.target.releasePointerCapture(held.pointerId);
+  }, [metrics.width, metrics.height]);
+
   function normalizedPointer(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
     const video = targetVideo ?? videoRef.current;
     const bounds = video?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
@@ -962,7 +956,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       };
       const visibility = () => { if (target.ownerDocument.hidden) cancel(); };
       const cleanup = () => { owner.removeEventListener("blur", cancel); owner.removeEventListener("pagehide", cancel); target.ownerDocument.removeEventListener("visibilitychange", visibility); };
-      const sender = new LiveTouchSender(packet => client.sendTouch(packet), owner, { x: start.x, y: start.y }, crypto.randomUUID(), cancel);
+      const sender = new LiveTouchSender(packet => client.sendTouch(packet), owner, { x: start.x, y: start.y }, crypto.randomUUID(), cancel, client.supports("lowLatencyInput") ? 16 : 32);
       if (!sender.started) { cancel(); setToast("터치를 보내지 못했어요. 연결을 확인해 주세요."); return; }
       sender.move(point);
       livePointerRef.current = { sender, cleanup };
@@ -1134,13 +1128,29 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               >
                 {devices.length ? devices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>) : <option value="">등록된 기기 없음</option>}
               </select>
-              <details className="display-settings"><summary>화면 설정</summary><div className="display-settings-panel"><label>해상도<select
+              <details className="display-settings"><summary>화면 설정</summary><div className="display-settings-panel">
+              <label>품질 모드<select aria-label="영상 품질 모드" value={qualityMode} onChange={event => {
+                const mode = event.target.value as QualityMode;
+                modeRef.current = mode; setQualityMode(mode); adaptiveRef.current.reset();
+                const preset = mode === "auto" || mode === "custom" ? QUALITY_PRESETS.balanced : QUALITY_PRESETS[mode];
+                resolutionRef.current = preset.edge; frameRateRef.current = preset.fps;
+                setResolution(preset.edge); setFrameRate(preset.fps);
+                if (connected) sendPayload({ type: "quality", shortEdge: preset.edge, fps: preset.fps });
+              }}>
+                {Object.entries(QUALITY_PRESETS).map(([key, value]) => <option key={key} value={key} disabled={key === "stable" && connected && !toolsRef.current?.supports("quality720")}>{value.label} · {value.edge}p/{value.fps}fps</option>)}
+                <option value="auto">자동 · 네트워크에 따라 조절</option><option value="custom">사용자 지정</option>
+              </select></label>
+              <label>연결 코덱<select aria-label="영상 코덱" disabled={connected || waiting} value={codecMode} onChange={event => {
+                setCodecMode(event.target.value); codecRef.current = event.target.value; codecFallbackRef.current = false;
+              }}><option value="vp8">VP8 · 기본</option><option value="h264">H.264 우선 · VP8 fallback (실험)</option></select></label>
+              <label>해상도<select
                 className="quality-select"
                 aria-label="화면 해상도"
                 value={resolution}
                 onChange={(event) => changeResolution(Number(event.target.value) as ResolutionSetting)}
               >
                 <option value={540}>540p</option>
+                <option value={720} disabled={connected && !toolsRef.current?.supports("quality720")}>720p</option>
                 <option value={1080}>1080p</option>
                 <option value={1440}>1440p</option>
               </select></label><label>초당 프레임<select
@@ -1165,6 +1175,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 <option value={100}>투명도 100%</option>
               </select></label></div></details>
               <button className="viewer-button" type="button" title="화질을 낮추고 화면 갱신을 늘려 반응 속도를 우선합니다." onClick={() => {
+                modeRef.current = "custom"; setQualityMode("custom");
                 resolutionRef.current = 540; frameRateRef.current = 60;
                 setResolution(540); setFrameRate(60);
                 if (connected) sendPayload({ type: "quality", shortEdge: 540, fps: 60 });
@@ -1315,12 +1326,19 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
           {connected && <details className="control-card connection-details"><summary>상세 연결 정보</summary>          <div className="metrics-card" aria-label="연결 정보">
             <div className="metric"><span className="metric-icon">↔</span><small>경로</small><strong>{connected ? metrics.path === "turn" ? "중계" : metrics.path === "direct" ? "직접" : "확인 중" : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">▮▮▮</span><small>지연</small><strong>{connected && metrics.latency !== null ? `${metrics.latency} ms` : "—"}</strong></div>
+            <div className="metric"><span className="metric-icon">▮▮▮</span><small>네트워크 RTT</small><strong>{connected && metrics.latency !== null ? `${metrics.latency} ms` : "—"}</strong></div>
             <div className="metric"><span className="metric-icon">HD</span><small>해상도</small><strong>{connected && metrics.width && metrics.height ? `${metrics.width}×${metrics.height}` : "—"}</strong></div>
             <div className="metric"><span className="metric-icon">▶</span><small>프레임</small><strong>{connected && metrics.fps !== null ? `${metrics.fps} fps` : "—"}</strong></div>
             <div className="metric"><span className="metric-icon">⇣</span><small>비트레이트</small><strong>{connected && metrics.bitrateKbps !== null ? `${metrics.bitrateKbps} kbps` : "—"}</strong></div>
             <div className="metric"><span className="metric-icon">%</span><small>손실</small><strong>{connected && metrics.packetLoss !== null ? `${metrics.packetLoss}%` : "—"}</strong></div>
           </div>
+
+            <p>RTT는 입력부터 화면 표시까지의 종단 지연이 아닙니다. 종단 지연: 미측정.</p>
+            <p>코덱: {metrics.codec ?? "확인 불가"} · 디코딩: {metrics.decodeMs === null ? "확인 불가" : `${metrics.decodeMs.toFixed(1)} ms/프레임`} · 지터 버퍼: {metrics.jitterMs === null ? "확인 불가" : `${metrics.jitterMs.toFixed(1)} ms`}</p>
+            <p>구간 드롭: {metrics.dropped ?? "확인 불가"} · {metrics.stalled ? "새 프레임 없음 (정지 화면일 수도 있음)" : "프레임 정지 미감지"} · 입력 전송 대기: {metrics.bufferedBytes} bytes</p>
+            <p>Android 캡처/송신 FPS: {senderMetrics?.captureFps?.toFixed(1) ?? "확인 불가"} / {senderMetrics?.sendFps?.toFixed(1) ?? "확인 불가"} · 송신: {senderMetrics?.sendKbps?.toFixed(0) ?? "확인 불가"} kbps</p>
+            <p>인코딩: {senderMetrics?.encodeMs?.toFixed(1) ?? "확인 불가"} ms/프레임 · 인코더: {senderMetrics?.encoder ?? "확인 불가"} · 전력 효율 인코더 지표: {senderMetrics?.hardwareEncoder === null || !senderMetrics ? "확인 불가" : String(senderMetrics.hardwareEncoder)}</p>
+            <p>적용 제한: {senderMetrics?.configuredEdge ?? "—"}p/{senderMetrics?.configuredFps ?? "—"}fps · RTP 제한 수락: {senderMetrics?.rtpLimitsApplied === null || !senderMetrics ? "확인 불가" : String(senderMetrics.rtpLimitsApplied)} · 열 상태: {senderMetrics?.thermal ?? "확인 불가"} · 품질 모드: {qualityMode === "auto" ? "자동" : "수동 (기기 안전 제한은 적용)"}</p>
 
 </details>}
           <button className="disconnect-button" type="button" disabled={!connected && !waiting} onClick={() => setDialog("disconnect")}>연결 해제</button>

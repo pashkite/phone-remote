@@ -73,6 +73,16 @@ class ProjectionSmokeService : Service() {
                 loopbackReceiver = loopback
                 loopback.connect()
                 loopback.awaitConnectedAndFirstFrame(CONNECTION_TIMEOUT_MS)
+                for ((edge, fps) in listOf(720 to 30, 1080 to 60, 540 to 24)) {
+                    checkNotNull(session).setQuality(edge, fps)
+                    loopback.awaitNewFrames(5000)
+                }
+                loopback.release()
+                checkNotNull(session).closePeer()
+                loopback = WebRtcLoopbackReceiver(checkNotNull(session))
+                loopbackReceiver = loopback
+                loopback.connect()
+                loopback.awaitConnectedAndFirstFrame(CONNECTION_TIMEOUT_MS)
                 Thread.sleep(STREAM_DURATION_MS)
                 check(!projectionStopped.get()) { "Android가 테스트 도중 화면 공유를 중지했습니다." }
                 recordSuccess()

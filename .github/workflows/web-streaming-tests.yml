@@ -1,0 +1,24 @@
+name: Web streaming regression tests
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "tests/**"
+      - "scripts/**"
+      - ".github/workflows/web-streaming-tests.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: bash scripts/sites-env.sh -- bash scripts/install-ci.sh
+      - run: bash scripts/test-web-streaming.sh

@@ -1,3 +1,4 @@
+import { parseSenderMetrics, type SenderMetrics } from "./streaming";
 import { Diagnostics } from "./diagnostics";
 import { FileTransfer, type FileOffer } from "./files";
 import { MAX_CLIPBOARD_BYTES, PROTOCOL_VERSION, type CommandStatus } from "./protocol";
@@ -5,6 +6,7 @@ import { PcmPlayer, ScreenRecording, downloadBlob, screenshot, timestamp } from 
 export type ToolsState = { features: string[]; result: string; clipboard: string; offer: FileOffer | null; fileStatus: string; recording: boolean; recordingAt: number; audio: boolean; audioStatus: string };
 export class RemoteClient {
   readonly diagnostics: Diagnostics;
+  senderMetrics: SenderMetrics | null = null;
   readonly id = crypto.randomUUID();
   private pending = new Map<string, { timer: ReturnType<typeof setTimeout>; type: string }>();
   private sequence = 0;
@@ -24,7 +26,7 @@ export class RemoteClient {
   opened() { this.diagnostics.record("channel", { state: "open" }); }
   private raw(payload: Record<string, unknown>) { if (this.channel.readyState !== "open" || this.channel.bufferedAmount > 262144) return false; try { this.channel.send(JSON.stringify(payload)); return true; } catch { return false; } }
   supports(feature: string) { return this.state.features.includes(feature); }
-  sendTouch(payload: Record<string, unknown>) { return this.supports("liveTouch") && this.channel.bufferedAmount <= 2048 && this.raw(payload); }
+  sendTouch(payload: Record<string, unknown>) { return this.supports("liveTouch") && this.channel.bufferedAmount <= (payload.phase === "up" || payload.phase === "cancel" ? 65536 : 2048) && this.raw(payload); }
   send(payload: Record<string, unknown>) {
     if (!this.state.features.includes("commandAck")) return this.raw(payload);
     if (this.pending.size >= 256) { this.update({ result: "명령 응답이 밀리고 있습니다. 잠시 기다려 주세요." }); return false; }
@@ -66,6 +68,7 @@ export class RemoteClient {
       }
       if (m.type === "clipboard" && typeof m.text === "string" && new TextEncoder().encode(m.text).length <= MAX_CLIPBOARD_BYTES) this.update({ clipboard: m.text });
       if (m.type === "audioState") this.update({ audio: m.state === "started", audioStatus: m.state === "started" ? "재생 소리 전송 중 · 보호된 앱은 무음일 수 있어요." : m.code === "AUDIO_PERMISSION_REQUIRED" ? "휴대폰 앱 → 전송·대기·진단 → 재생 소리 캡처 권한을 허용해 주세요." : m.code ? `오디오 캡처를 시작할 수 없습니다 (${String(m.code).slice(0,50)})` : "꺼짐" });
+      if (m.type === "streamMetrics" && m.v === 1) this.senderMetrics = parseSenderMetrics(m.data, performance.now());
       if (m.type === "notice" && typeof m.message === "string") this.update({ result: m.message.slice(0, 300) });
       if (m.type === "diagnostic" && m.data && typeof m.data === "object") this.diagnostics.record("android", m.data);
     } catch { this.diagnostics.record("protocol", { code: "INVALID_MESSAGE" }); }
@@ -90,5 +93,5 @@ export class RemoteClient {
   }
   audioVolume(value: number) { this.player.volume(value); }
   exportDiagnostics() { downloadBlob(new Blob([this.diagnostics.export()], { type: "application/json" }), `GalaxyRemote-diagnostics-${timestamp()}.json`); }
-  close() { this.fileTransfer?.close(); this.recording.stop(); this.player.close(); this.pending.forEach(p => clearTimeout(p.timer)); this.pending.clear(); this.update({ features: [], clipboard: "", offer: null, audio: false, audioStatus: "꺼짐" }); this.diagnostics.record("channel", { state: "closed" }); }
+  close() { this.senderMetrics = null; this.fileTransfer?.close(); this.recording.stop(); this.player.close(); this.pending.forEach(p => clearTimeout(p.timer)); this.pending.clear(); this.update({ features: [], clipboard: "", offer: null, audio: false, audioStatus: "꺼짐" }); this.diagnostics.record("channel", { state: "closed" }); }
 }

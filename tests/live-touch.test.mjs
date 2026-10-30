@@ -12,3 +12,10 @@ test('a retired queued timer cannot transmit movement after pointer release',()=
 test('initial send failure never starts heartbeat or fabricates a held touch',()=>{let timers=0;const sender=new LiveTouchSender(()=>false,{setInterval(){timers++;return 1;},clearInterval(){}},{x:.5,y:.5},'test-id',()=>{});assert.equal(sender.started,false);assert.equal(timers,0);sender.finish('cancel');});
 
 test('stationary drag does not flood the phone with move packets',()=>{const h=setup();for(let i=0;i<15;i++)h.tick();assert.equal(h.packets.length,1);h.tick();assert.equal(h.packets.length,2);});
+
+test('opted-in low-latency samples at 16ms and preserves boundaries/heartbeat',()=>{
+ const packets=[];let tick;const sender=new LiveTouchSender(p=>{packets.push(p);return true;},{setInterval(cb,ms){assert.equal(ms,16);tick=cb;return 1;},clearInterval(){}},{x:.2,y:.3},'id',()=>{},16);
+ sender.move({x:.8,y:.9});tick();assert.equal(packets[1].phase,'move');
+ for(let i=0;i<31;i++)tick();assert.equal(packets.length,2);tick();assert.equal(packets[2].phase,'move');
+ sender.finish('cancel');tick();assert.deepEqual(packets.map(p=>p.phase),['down','move','move','cancel']);
+});

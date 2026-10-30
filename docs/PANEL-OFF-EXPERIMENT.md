@@ -169,8 +169,10 @@ limited experiment, not an automatic solution. No such fallback is implemented.
 
 ## Decision
 
-CONDITIONAL GO for the isolated APK/device experiment. Stage 3 gaming/UI work is
-blocked until real panel OFF, fresh video/input and normal/abnormal recovery pass.
+CONDITIONAL GO for the isolated APK/device experiment. The user subsequently
+authorized independent engine/input/UI development before final device testing;
+see WEBRTC-LOW-LATENCY-STAGE3.md. Physical panel OFF remains an unverified
+experimental feature and production readiness still requires real-device tests.
 No device success, One UI compatibility or production-update compatibility is
 claimed by compilation or unit tests.
 

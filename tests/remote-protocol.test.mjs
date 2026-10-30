@@ -6,7 +6,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { pathToFileURL } from 'node:url';
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'remote-tests-'));
-for (const name of ['protocol','diagnostics','media','files','client']) {
+for (const name of ['protocol','diagnostics','media','files','streaming','client']) {
  const code=ts.transpileModule(fs.readFileSync(new URL(`../lib/remote/${name}.ts`,import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText.replace(/from "\.\/(\w+)"/g,'from "./$1.mjs"');
  fs.writeFileSync(path.join(tmp,`${name}.mjs`),code);
 }
@@ -94,4 +94,18 @@ test('recording write failures never report a successful save',async t=>{
  globalThis.MediaRecorder=class {static isTypeSupported(){return true;}state='inactive';constructor(){recorders.push(this);}start(){this.state='recording';}stop(){this.state='inactive';this.onstop?.();}pause(){this.state='paused';}resume(){this.state='recording';}};
  const recording=new ScreenRecording(m=>message=m);await recording.start({getVideoTracks:()=>[{readyState:'live'}]});const recorder=recorders[0];recorder.ondataavailable({data:new Blob(['partial'])});await tick();
  assert.match(message,/오류/);assert.doesNotMatch(message,/저장했습니다/);
+});
+
+test('essential touch release gets bounded headroom even when move budget is full',()=>{
+ const channel=new Channel();const client=new RemoteClient(channel,{},()=>null,()=>null);
+ channel.message({type:'capabilities',v:1,features:['liveTouch']});channel.bufferedAmount=3000;
+ assert.equal(client.sendTouch({phase:'move'}),false);assert.equal(client.sendTouch({phase:'up'}),true);
+ assert.equal(client.sendTouch({phase:'cancel'}),true);channel.bufferedAmount=70000;
+ assert.equal(client.sendTouch({phase:'up'}),false);client.close();
+});
+test('old app telemetry stays unknown, new telemetry expires at consumer and clears on close',()=>{
+ const channel=new Channel();const client=new RemoteClient(channel,{},()=>null,()=>null);
+ assert.equal(client.senderMetrics,null);channel.message({type:'streamMetrics',v:1,data:{captureFps:60,sendFps:30,encodeMs:2}});
+ assert.equal(client.senderMetrics.sendFps,30);assert.equal(client.senderMetrics.hardwareEncoder,null);
+ client.close();assert.equal(client.senderMetrics,null);
 });

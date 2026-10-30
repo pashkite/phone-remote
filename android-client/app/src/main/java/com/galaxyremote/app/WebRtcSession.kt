@@ -2,7 +2,10 @@ package com.galaxyremote.app
 
 import android.content.Context
 import android.content.Intent
-import android.media.projection.MediaProjection
+import com.galaxyremote.app.streaming.*
+import android.os.PowerManager
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import android.os.Build
 import android.util.DisplayMetrics
 import android.view.WindowManager
@@ -18,14 +21,13 @@ import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpReceiver
+import org.webrtc.RtpParameters
 import org.webrtc.RtpSender
 import org.webrtc.RtpTransceiver
-import org.webrtc.ScreenCapturerAndroid
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import org.webrtc.SoftwareVideoDecoderFactory
 import org.webrtc.SurfaceTextureHelper
-import org.webrtc.VideoCapturer
 import org.webrtc.VideoCodecInfo
 import org.webrtc.VideoDecoder
 import org.webrtc.VideoDecoderFactory
@@ -49,12 +51,32 @@ class WebRtcSession(
     ) -> Unit,
     private val onConnectionState: (connected: Boolean, message: String) -> Unit,
     private val onProjectionStopped: () -> Unit,
+    private val captureFactory: (Intent, () -> Unit) -> CaptureEngine = { permission, stopped -> MediaProjectionCapture(permission, stopped) },
     private val onControlResult: ((JSONObject, (Boolean, String?) -> Unit) -> Unit)? = null,
 ) {
     private val preferences = RemotePreferences(context)
     private val eglBase: EglBase
     private val factory: PeerConnectionFactory
-    private lateinit var capturer: VideoCapturer
+    private lateinit var captureEngine: CaptureEngine
+    private var requestedQuality = StreamQuality.DEFAULT
+    private var appliedQuality = StreamQuality.DEFAULT
+    private val statsExecutor = Executors.newSingleThreadScheduledExecutor()
+    private var statsFuture: java.util.concurrent.ScheduledFuture<*>? = null
+    private var lastStatsAt = 0L
+    private var lastCaptureFrames = 0L
+    private var lastSentFrames: Long? = null
+    private var lastSentBytes = 0L
+    private var lastEncodeTime: Double? = null
+    private var overloadSamples = 0
+    private var encoderOverloaded = false
+    private var encoderRecoverySamples = 0
+    private var lastCpuTime = 0L
+    private var lastSendDelay = 0.0
+    private var lastPacketsSent = 0L
+    private var rtpLimitsApplied = false
+    private val thermalLimiter = ThermalLimiter()
+    private var lastCaptureWidth = 0
+    private var lastCaptureHeight = 0
     private lateinit var surfaceTextureHelper: SurfaceTextureHelper
     private lateinit var videoSource: VideoSource
     private lateinit var videoTrack: VideoTrack
@@ -86,41 +108,45 @@ class WebRtcSession(
         preferences.markNativeStage("peer-factory-create")
         factory = PeerConnectionFactory.builder()
             .setOptions(PeerConnectionFactory.Options())
-            // Prefer the Galaxy hardware VP8 encoder and retain WebRTC's
-            // software fallback. This keeps high-resolution screen sharing
-            // responsive without reopening vendor H.264 negotiation issues.
-            .setVideoEncoderFactory(Vp8OnlyVideoEncoderFactory(eglBase.eglBaseContext))
+            // VP8 is the baseline; H.264 is advertised only when libwebrtc supports it.
+            // The browser must explicitly opt in, keeping VP8 in its offer.
+            .setVideoEncoderFactory(CompatibleVideoEncoderFactory(eglBase.eglBaseContext))
             .setVideoDecoderFactory(Vp8OnlyVideoDecoderFactory())
             .createPeerConnectionFactory()
 
-        preferences.markNativeStage("screen-capturer-create")
-        capturer = ScreenCapturerAndroid(
-            projectionPermission,
-            object : MediaProjection.Callback() {
-                override fun onStop() {
-                    onProjectionStopped()
-                }
-            },
-        )
-        preferences.markNativeStage("surface-helper-create")
-        surfaceTextureHelper = SurfaceTextureHelper.create(
-            "GalaxyRemoteScreenCapture",
-            eglBase.eglBaseContext,
-        )
-        videoSource = factory.createVideoSource(true)
-        capturer.initialize(surfaceTextureHelper, context.applicationContext, videoSource.capturerObserver)
-        val (captureWidth, captureHeight) = captureSize(HIGH_QUALITY.shortEdge)
-        // ScreenCapturerAndroid intentionally ignores its fps argument. Without
-        // an output adapter, a 120 Hz Galaxy can feed up to 120 frames/second
-        // into WebRTC and overload the native codec path.
-        val (initialWidth, initialHeight) = captureSize(BALANCED_QUALITY.shortEdge)
-        videoSource.adaptOutputFormat(initialWidth, initialHeight, 1)
-        preferences.markNativeStage("screen-capture-start")
-        capturer.startCapture(captureWidth, captureHeight, HIGH_QUALITY.fps)
-        preferences.markNativeStage("video-track-create")
-        videoTrack = factory.createVideoTrack("galaxy-screen", videoSource)
-        videoTrack.setEnabled(false)
-        preferences.markNativeStage("waiting-for-pc-offer")
+        try {
+            preferences.markNativeStage("screen-capturer-create")
+            captureEngine = captureFactory(projectionPermission, onProjectionStopped)
+            preferences.markNativeStage("surface-helper-create")
+            surfaceTextureHelper = SurfaceTextureHelper.create(
+                "GalaxyRemoteScreenCapture",
+                eglBase.eglBaseContext,
+            )
+            videoSource = factory.createVideoSource(true)
+            captureEngine.initialize(surfaceTextureHelper, context.applicationContext, videoSource.capturerObserver)
+            val (captureWidth, captureHeight) = captureSize(StreamQuality.DEFAULT.shortEdge)
+            // ScreenCapturerAndroid intentionally ignores its fps argument. Without
+            // an output adapter, a 120 Hz Galaxy can feed up to 120 frames/second
+            // into WebRTC and overload the native codec path.
+            val (initialWidth, initialHeight) = captureSize(StreamQuality.DEFAULT.shortEdge)
+            videoSource.adaptOutputFormat(initialWidth, initialHeight, 1)
+            preferences.markNativeStage("screen-capture-start")
+            captureEngine.start(captureWidth, captureHeight, StreamQuality.DEFAULT.fps)
+            lastCaptureWidth = captureWidth; lastCaptureHeight = captureHeight
+            preferences.markNativeStage("video-track-create")
+            videoTrack = factory.createVideoTrack("galaxy-screen", videoSource)
+            videoTrack.setEnabled(false)
+            preferences.markNativeStage("waiting-for-pc-offer")
+        } catch (error: Exception) {
+            statsExecutor.shutdownNow()
+            if (::captureEngine.isInitialized) runCatching { captureEngine.release() }
+            if (::videoTrack.isInitialized) runCatching { videoTrack.dispose() }
+            if (::videoSource.isInitialized) runCatching { videoSource.dispose() }
+            if (::surfaceTextureHelper.isInitialized) runCatching { surfaceTextureHelper.dispose() }
+            runCatching { factory.dispose() }
+            runCatching { eglBase.release() }
+            throw error
+        }
     }
 
     @Synchronized
@@ -144,16 +170,20 @@ class WebRtcSession(
             ?: throw IllegalStateException("WebRTC 연결을 만들지 못했습니다.")
         peerConnection = peer
         videoTrack.setEnabled(true)
-        val (activeWidth, activeHeight) = captureSize(BALANCED_QUALITY.shortEdge)
-        videoSource.adaptOutputFormat(activeWidth, activeHeight, BALANCED_QUALITY.fps)
+        val (activeWidth, activeHeight) = captureSize(StreamQuality.DEFAULT.shortEdge)
+        videoSource.adaptOutputFormat(activeWidth, activeHeight, StreamQuality.DEFAULT.fps)
         preferences.markNativeStage("answer-add-video-track")
         videoSender = peer.addTrack(videoTrack, listOf("galaxy-screen-stream"))
         val sender = videoSender ?: throw IllegalStateException("화면 영상 전송기를 만들지 못했습니다.")
         val senderParameters = sender.parameters
         senderParameters.encodings.forEach { encoding ->
-            encoding.maxBitrateBps = BALANCED_QUALITY.bitrateBps
+            encoding.maxBitrateBps = StreamQuality.DEFAULT.bitrateBps
+            encoding.maxFramerate = StreamQuality.DEFAULT.fps
         }
-        sender.setParameters(senderParameters)
+        rtpLimitsApplied = sender.setParameters(senderParameters)
+        requestedQuality = StreamQuality.DEFAULT
+        applyQuality()
+        startTelemetry(peer)
         preferences.markNativeStage("answer-set-remote-sdp")
         peer.setRemoteDescription(
             SimpleSdpObserver(
@@ -182,17 +212,89 @@ class WebRtcSession(
 
     @Synchronized
     fun setQuality(shortEdge: Int, fps: Int): String {
-        val safeShortEdge = shortEdge.takeIf { it in ALLOWED_SHORT_EDGES } ?: BALANCED_QUALITY.shortEdge
-        val safeFps = fps.takeIf { it in ALLOWED_FRAME_RATES } ?: BALANCED_QUALITY.fps
-        val (width, height) = captureSize(safeShortEdge)
-        capturer.changeCaptureFormat(width, height, safeFps)
-        videoSource.adaptOutputFormat(width, height, if (peerConnection == null) 1 else safeFps)
+        requestedQuality = StreamQuality.resolve(shortEdge, fps)
+        applyQuality()
+        return "${appliedQuality.shortEdge}p · ${appliedQuality.fps}fps · ${appliedQuality.bitrateBps}bps"
+    }
+
+    @Synchronized fun refreshCapture() = applyQuality()
+
+    private fun thermalStatus(): Int = if (Build.VERSION.SDK_INT >= 29)
+        context.getSystemService(PowerManager::class.java).currentThermalStatus else 0
+
+    private fun applyQuality() {
+        val quality = StreamQuality.resolve(requestedQuality.shortEdge, requestedQuality.fps, thermalLimiter.update(thermalStatus(), android.os.SystemClock.elapsedRealtime()), encoderOverloaded)
+        val (width, height) = captureSize(quality.shortEdge)
         videoSender?.let { sender ->
             val parameters = sender.parameters
-            parameters.encodings.forEach { it.maxBitrateBps = bitrateFor(safeShortEdge, safeFps) }
-            if (!sender.setParameters(parameters)) throw IllegalStateException("영상 전송 설정이 거절됐습니다.")
+            parameters.degradationPreference = RtpParameters.DegradationPreference.MAINTAIN_FRAMERATE
+            parameters.encodings.forEach { it.maxBitrateBps = quality.bitrateBps; it.maxFramerate = quality.fps }
+            rtpLimitsApplied = sender.setParameters(parameters)
         }
-        return "${width}×${height} · ${safeFps}fps"
+        if (width != lastCaptureWidth || height != lastCaptureHeight) {
+            captureEngine.resize(width, height, quality.fps)
+            lastCaptureWidth = width; lastCaptureHeight = height
+        }
+        // ScreenCapturerAndroid ignores fps. Adaptation AND RTP maxFramerate bound output.
+        videoSource.adaptOutputFormat(width, height, if (peerConnection == null) 1 else quality.fps)
+        appliedQuality = quality
+    }
+
+    private fun startTelemetry(peer: PeerConnection) {
+        lastStatsAt = 0; overloadSamples = 0; encoderOverloaded = false; encoderRecoverySamples = 0
+        statsFuture = statsExecutor.scheduleWithFixedDelay({
+            synchronized(this) {
+                if (peerConnection !== peer) return@synchronized
+                val safe = StreamQuality.resolve(requestedQuality.shortEdge, requestedQuality.fps, thermalLimiter.update(thermalStatus(), android.os.SystemClock.elapsedRealtime()), encoderOverloaded)
+                if (safe != appliedQuality || !rtpLimitsApplied) try { applyQuality() } catch (_: Exception) { /* Retry on next bounded sample. */ }
+                peer.getStats { report -> try { statsExecutor.execute { synchronized(this) {
+                    if (peerConnection !== peer) return@synchronized
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    val seconds = (now - lastStatsAt) / 1000.0
+                    val outbound = report.statsMap.values.firstOrNull { it.type == "outbound-rtp" && (it.members["kind"] == "video" || it.members["mediaType"] == "video") }?.members ?: return@synchronized
+                    fun number(key: String) = (outbound[key] as? Number)?.toDouble() ?: 0.0
+                    val frames = (outbound["framesEncoded"] as? Number)?.toLong()
+                    val bytes = number("bytesSent").toLong()
+                    val encodeTime = (outbound["totalEncodeTime"] as? Number)?.toDouble()
+                    val captures = captureEngine.frames
+                    val cpu = android.os.Process.getElapsedCpuTime()
+                    val previousFrames = lastSentFrames
+                    val previousEncode = lastEncodeTime
+                    val sent = if (frames != null && previousFrames != null && frames >= previousFrames) frames - previousFrames else null
+                    val packets = number("packetsSent").toLong()
+                    val delay = number("totalPacketSendDelay")
+                    if (lastStatsAt > 0 && seconds > 0 && bytes >= lastSentBytes) {
+                        val encodeMs = if (sent != null && sent > 0 && encodeTime != null && previousEncode != null && encodeTime >= previousEncode) (encodeTime - previousEncode) * 1000 / sent else null
+                        val overloaded = outbound["qualityLimitationReason"] == "cpu" || (encodeMs != null && encodeMs > 900.0 / appliedQuality.fps)
+                        overloadSamples = if (overloaded) overloadSamples + 1 else 0
+                        encoderRecoverySamples = if (!overloaded) encoderRecoverySamples + 1 else 0
+                        if (overloadSamples >= 3) encoderOverloaded = true
+                        if (encoderRecoverySamples >= 15) encoderOverloaded = false
+                        val codec = report.statsMap[outbound["codecId"]]?.members?.get("mimeType")
+                        val data = JSONObject().put("captureEngine", captureEngine.name)
+                            .put("captureFps", (captures - lastCaptureFrames).coerceAtLeast(0) / seconds)
+                            .put("sendFps", if (sent != null) sent / seconds else JSONObject.NULL).put("sendKbps", (bytes - lastSentBytes) * 8 / seconds / 1000)
+                            .put("encodeMs", encodeMs ?: JSONObject.NULL)
+                            .put("sendQueueMs", if (packets > lastPacketsSent) (delay - lastSendDelay).coerceAtLeast(0.0) * 1000 / (packets - lastPacketsSent) else JSONObject.NULL)
+                            .put("encoder", outbound["encoderImplementation"] ?: JSONObject.NULL)
+                            .put("hardwareEncoder", outbound["powerEfficientEncoder"] ?: JSONObject.NULL)
+                            .put("codec", codec ?: JSONObject.NULL).put("thermal", thermalStatus())
+                            .put("encoderOverloaded", encoderOverloaded)
+                            .put("cpuCorePercent", (cpu - lastCpuTime).coerceAtLeast(0) / (seconds * 10))
+                            .put("configuredEdge", appliedQuality.shortEdge).put("configuredFps", appliedQuality.fps)
+                            .put("configuredBitrate", appliedQuality.bitrateBps).put("rtpLimitsApplied", rtpLimitsApplied)
+                            .put("width", number("frameWidth")).put("height", number("frameHeight"))
+                        if (controlChannel?.bufferedAmount()?.let { it < 16384 } == true)
+                            sendJson(JSONObject().put("type", "streamMetrics").put("v", 1).put("data", data))
+                        try {
+                            if (StreamQuality.resolve(requestedQuality.shortEdge, requestedQuality.fps, thermalLimiter.update(thermalStatus(), android.os.SystemClock.elapsedRealtime()), encoderOverloaded) != appliedQuality) applyQuality()
+                        } catch (_: Exception) { sendNotice("영상 제한 설정을 적용하지 못했습니다.") }
+                    }
+                    lastStatsAt = now; lastCaptureFrames = captures; lastSentFrames = frames; lastSentBytes = bytes
+                    lastEncodeTime = encodeTime; lastCpuTime = cpu; lastSendDelay = delay; lastPacketsSent = packets
+                } } } catch (_: java.util.concurrent.RejectedExecutionException) { /* Released session. */ } }
+            }
+        }, 0, 2, TimeUnit.SECONDS)
     }
 
     fun sendJson(value: JSONObject): Boolean {
@@ -209,7 +311,7 @@ class WebRtcSession(
     fun setAudio(enabled: Boolean): String? {
         if (!enabled) { audio.close(); sendJson(JSONObject().put("type", "audioState").put("state", "stopped")); return null }
         if (audioChannel?.state() != DataChannel.State.OPEN) return "AUDIO_CHANNEL_UNAVAILABLE"
-        val code = audio.start(context, (capturer as? ScreenCapturerAndroid)?.mediaProjection)
+        val code = audio.start(context, captureEngine.projection)
         sendJson(JSONObject().put("type", "audioState").put("state", if (code == null) "started" else "failed").put("code", code))
         return code
     }
@@ -233,6 +335,7 @@ class WebRtcSession(
 
     @Synchronized
     fun closePeer() {
+        statsFuture?.cancel(false); statsFuture = null
         RemoteAccessibilityService.stopTouch()
         pendingSessionId = null
         commands?.close(); commands = null
@@ -259,14 +362,8 @@ class WebRtcSession(
     fun release() {
         preferences.markNativeStage("webrtc-release")
         closePeer()
-        try {
-            capturer.stopCapture()
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-        } catch (_: Exception) {
-            // Projection may already have been stopped by Android.
-        }
-        capturer.dispose()
+        statsExecutor.shutdownNow()
+        try { captureEngine.release() } catch (_: Exception) { /* projection may already be stopped */ }
         videoTrack.dispose()
         videoSource.dispose()
         surfaceTextureHelper.dispose()
@@ -342,7 +439,7 @@ class WebRtcSession(
             },
         )
         fun capabilities() {
-            val features = JSONArray().put("commandAck").put("clipboard").put("files").put("diagnostics").put("standby").put("liveTouch")
+            val features = JSONArray().put("streamMetrics").put("quality720").put("lowLatencyInput").put("commandAck").put("clipboard").put("files").put("diagnostics").put("standby").put("liveTouch")
             if (Build.VERSION.SDK_INT >= 29) features.put("pcmAudio")
             sendJson(JSONObject().put("type", "capabilities").put("v", 1).put("features", features))
         }
@@ -398,22 +495,7 @@ class WebRtcSession(
             width = metrics.widthPixels
             height = metrics.heightPixels
         }
-        return scaledCaptureSize(width, height, shortEdge)
-    }
-
-    private fun scaledCaptureSize(width: Int, height: Int, shortEdge: Int): Pair<Int, Int> {
-        val scale = minOf(1.0, shortEdge.toDouble() / minOf(width, height).coerceAtLeast(1))
-        fun even(value: Double) = ((value.toInt().coerceAtLeast(2)) / 2) * 2
-        return even(width * scale) to even(height * scale)
-    }
-
-    private fun bitrateFor(shortEdge: Int, fps: Int): Int {
-        val base = when (shortEdge) {
-            540 -> 1_200_000
-            1440 -> 7_000_000
-            else -> 4_500_000
-        }
-        return if (fps == 60) (base * 1.7).toInt() else base
+        return StreamQuality.size(width, height, shortEdge)
     }
 
     private inner class PeerObserver(private val observerSessionId: String) : PeerConnection.Observer {
@@ -479,34 +561,20 @@ class WebRtcSession(
         override fun onTrack(transceiver: RtpTransceiver?) = Unit
     }
 
-    companion object {
-        private data class Quality(
-            val label: String,
-            val shortEdge: Int,
-            val fps: Int,
-            val bitrateBps: Int,
-        )
 
-        private val DATA_QUALITY = Quality("데이터 절약", 540, 24, 1_200_000)
-        private val BALANCED_QUALITY = Quality("자동", 1080, 30, 4_500_000)
-        private val SMOOTH_QUALITY = Quality("부드러움", 1080, 60, 8_000_000)
-        private val HIGH_QUALITY = Quality("선명", 1440, 30, 7_000_000)
-        private val ALLOWED_SHORT_EDGES = setOf(540, 1080, 1440)
-        private val ALLOWED_FRAME_RATES = setOf(24, 30, 60)
-    }
 }
 
-private class Vp8OnlyVideoEncoderFactory(
+private class CompatibleVideoEncoderFactory(
     eglContext: EglBase.Context,
 ) : VideoEncoderFactory {
     private val delegate = DefaultVideoEncoderFactory(eglContext, true, true)
 
     override fun createEncoder(info: VideoCodecInfo): VideoEncoder? {
-        return if (isVp8(info)) delegate.createEncoder(info) else null
+        return if (CodecPolicy.allowed(info.name)) delegate.createEncoder(info) else null
     }
 
     override fun getSupportedCodecs(): Array<VideoCodecInfo> {
-        return delegate.supportedCodecs.filter(::isVp8).toTypedArray()
+        return delegate.supportedCodecs.filter { CodecPolicy.allowed(it.name) }.sortedBy { CodecPolicy.rank(it.name) }.toTypedArray()
     }
 }
 
