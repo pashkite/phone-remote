@@ -13,6 +13,7 @@ docs/assets/panel-preflight-fix/bundle.log
 docs/assets/panel-preflight-fix/device-availability.txt
 docs/assets/panel-preflight-fix/lint.log
 docs/assets/panel-preflight-fix/modified-files.txt
+docs/assets/panel-preflight-fix/pr.log
 docs/assets/panel-preflight-fix/python.log
 docs/assets/panel-preflight-fix/validation-summary.json
 docs/assets/panel-preflight-fix/web.log

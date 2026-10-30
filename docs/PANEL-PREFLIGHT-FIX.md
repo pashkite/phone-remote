@@ -102,6 +102,6 @@ adb install -r $Apk
 
 ## GitHub 결과
 
-[main과 비교·PR 생성](https://github.com/pashkite/phone-remote/compare/main...fix/linro-panel-help-preflight?expand=1). 새 브랜치만 푸시하며 main 자동 병합과 운영 배포는 하지 않는다. PR 생성 API가 403/Forbidden이면 실제 실패 결과와 브랜치·최종 커밋을 제출한다. [수정 파일 목록](assets/panel-preflight-fix/modified-files.txt)에 코드·테스트·APK·증거 파일을 기록한다.
+[main과 비교·PR 생성](https://github.com/pashkite/phone-remote/compare/main...fix/linro-panel-help-preflight?expand=1). 새 브랜치 푸시 후 PR 생성을 시도했지만 GitHub GraphQL API가 `Forbidden`을 반환했다. **PR 생성 완료는 확인하지 못했다.** [실제 API 실패 기록](assets/panel-preflight-fix/pr.log)을 남겼으며 브랜치와 최종 커밋을 제출한다. main 자동 병합과 운영 배포는 하지 않았다. [수정 파일 목록](assets/panel-preflight-fix/modified-files.txt)에 코드·테스트·APK·증거 파일을 기록한다.
 
 실기기 결과가 없는 항목은 계속 **미검증**이다. 지원하지 않는 펌웨어를 지원한다고 만들거나 안전 게이트를 완화한 수정이 아니다.
