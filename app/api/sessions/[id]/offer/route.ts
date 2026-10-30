@@ -10,7 +10,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!user) return apiError("로그인이 필요합니다.", 401);
   const { id } = await context.params;
   const payload = await readJson<OfferPayload>(request);
-  if (payload?.type !== "offer" || !payload.sdp || payload.sdp.length > 250_000) {
+  if (payload?.type !== "offer" || typeof payload.sdp !== "string" || !payload.sdp || payload.sdp.length > 250_000) {
     return apiError("올바른 연결 요청이 아닙니다.");
   }
 

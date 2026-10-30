@@ -1,0 +1,3 @@
+adb devices -l: no connected devices.
+Android emulator executable and /dev/kvm are unavailable in this environment.
+No panel OFF/ON command, install, data reset or device runtime test was executed.

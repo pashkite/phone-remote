@@ -39,7 +39,18 @@ class WebRtcLoopbackReceiver(private val session: WebRtcSession) {
     private var remoteDescriptionSet = false
     private var dataChannel: DataChannel? = null
     private var receivedTrack: VideoTrack? = null
-    private val sink = VideoSink { firstFrame.countDown() }
+    private val deliveredFrames = AtomicInteger(0)
+    private val sink = VideoSink { deliveredFrames.incrementAndGet(); firstFrame.countDown() }
+    fun awaitNewFrames(timeoutMs: Long) {
+        val initial = deliveredFrames.get()
+        val end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        while (System.nanoTime() < end) {
+            failure.get()?.let { throw IllegalStateException(it) }
+            if (deliveredFrames.get() > initial) return
+            Thread.sleep(100)
+        }
+        error("No new decoded frame after quality/reconnect change")
+    }
     private val peer: PeerConnection = session.createLoopbackPeerForTesting(
         PeerConnection.RTCConfiguration(emptyList()).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN

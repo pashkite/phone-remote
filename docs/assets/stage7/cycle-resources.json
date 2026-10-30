@@ -1,0 +1,32 @@
+{
+  "cycles": 100,
+  "baselineAfter10": {
+    "dom": {
+      "documents": 2,
+      "nodes": 1215,
+      "jsEventListeners": 274
+    },
+    "heap": {
+      "usedSize": 7923164,
+      "totalSize": 9224192,
+      "embedderHeapUsedSize": 2821552,
+      "backingStorageSize": 2910818
+    },
+    "intervals": 3
+  },
+  "after100": {
+    "dom": {
+      "documents": 2,
+      "nodes": 1215,
+      "jsEventListeners": 274
+    },
+    "heap": {
+      "usedSize": 9949972,
+      "totalSize": 11038720,
+      "embedderHeapUsedSize": 3243424,
+      "backingStorageSize": 2910943
+    },
+    "intervals": 3
+  },
+  "note": "Simulated peers; heap samples are observations, not a general memory-leak proof."
+}

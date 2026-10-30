@@ -1,0 +1,20 @@
+PASS cancel during delayed session response cannot resurrect a peer
+PASS selecting another device closes the previous device control
+PASS authentication expiry terminates open control and prevents reconnect
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: {"baseline":{"dom":{"documents":2,"nodes":1538,"jsEventListeners":287},"heap":{"usedSize":22364988,"totalSize":24649728,"embedderHeapUsedSize":3905568,"backingStorageSize":9434781},"intervals":3},"final":{"dom":{"documents":2,"nodes":1538,"jsEventListeners":344},"heap":{"usedSize":23613896,"totalSize":26255360,"embedderHeapUsedSize":4579960,"backingStorageSize":9434797},"intervals":3}}
+    at file:///workspace/phone-remote/scripts/test-integration-browser.mjs:43:9
+    at async scenario (file:///workspace/phone-remote/scripts/test-integration-browser.mjs:7:76)
+    at async file:///workspace/phone-remote/scripts/test-integration-browser.mjs:26:1 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.19.0

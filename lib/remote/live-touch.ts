@@ -10,18 +10,18 @@ export class LiveTouchSender {
   private lastPoint: TouchPoint;
   private elapsed = 0;
   private sentAt = 0;
-  constructor(private send: (packet: TouchPacket) => boolean, private clock: TouchClock, point: TouchPoint, private id: string, private failed: () => void) {
+  constructor(private send: (packet: TouchPacket) => boolean, private clock: TouchClock, point: TouchPoint, private id: string, private failed: () => void, private sampleMs: 16 | 32 = 32) {
     this.point = point;
     this.lastPoint = point;
     this.active = this.packet("down");
     if (this.active) this.timer = clock.setInterval(() => {
       if (!this.active) return;
-      this.elapsed += 32;
+      this.elapsed += this.sampleMs;
       const changed = this.point.x !== this.lastPoint.x || this.point.y !== this.lastPoint.y;
       if (!changed && this.elapsed - this.sentAt < 500) return;
       if (!this.packet("move")) { this.finish("cancel"); this.failed(); }
       else { this.lastPoint = this.point; this.sentAt = this.elapsed; }
-    }, 32);
+    }, this.sampleMs);
   }
   get started() { return this.active; }
   move(point: TouchPoint) { this.point = point; }

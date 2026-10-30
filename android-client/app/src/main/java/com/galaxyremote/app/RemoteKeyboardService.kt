@@ -27,7 +27,7 @@ class RemoteKeyboardService : InputMethodService() {
     override fun onCreateInputView(): View {
         return android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            addView(TextView(this@RemoteKeyboardService).apply { text = "Galaxy Remote 키보드 · PC 입력 대기"; setPadding(24, 16, 24, 16) })
+            addView(TextView(this@RemoteKeyboardService).apply { text = "린로 키보드 · PC 입력 대기"; setPadding(24, 16, 24, 16) })
             addView(android.widget.Button(this@RemoteKeyboardService).apply {
                 text = "클립보드 텍스트를 PC로 보내기"
                 setOnClickListener {
@@ -44,7 +44,7 @@ class RemoteKeyboardService : InputMethodService() {
 
     private fun originalInputView(): View {
         return TextView(this).apply {
-            text = "Galaxy Remote 키보드 사용 중\nPC에서 입력하면 현재 칸에 바로 전달됩니다."
+            text = "린로 키보드 사용 중\nPC에서 입력하면 현재 칸에 바로 전달됩니다."
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.rgb(31, 50, 78))

@@ -14,7 +14,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!user) return apiError("로그인이 필요합니다.", 401);
   const { id } = await context.params;
   const payload = await readJson<CandidatePayload>(request);
-  const candidate = payload?.candidate?.trim() ?? "";
+  const candidate = typeof payload?.candidate === "string" ? payload.candidate.trim() : "";
   if (!candidate || candidate.length > 8_192) return apiError("올바른 ICE 후보가 아닙니다.");
   const sdpMid = typeof payload?.sdpMid === "string" ? payload.sdpMid.slice(0, 64) : null;
   const sdpMLineIndex = Number.isInteger(payload?.sdpMLineIndex)

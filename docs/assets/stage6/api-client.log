@@ -1,0 +1,27 @@
+✔ session DELETE cannot erase another owner’s ICE candidates (80.986219ms)
+✔ malformed JSON field types fail as 400 instead of crashing handlers (80.788013ms)
+✔ closed device decisions never claim approval/open/rejection success (116.942607ms)
+✔ parallel invalid pairing attempts cannot bypass the 20-attempt window (414.012911ms)
+✔ real handlers complete pairing, consent, SDP, ICE, live lease and revocation in local D1 (540.047824ms)
+✔ expired or superseded pairing codes cannot register a device (128.856541ms)
+✔ binary chunks preserve UUID, absolute byte offset and all byte values (3.535966ms)
+✔ diagnostics reject payloads, tokens, filenames and IPs (72.236905ms)
+✔ old app uses original commands; new app gets IDs and increasing sequence; acknowledgements are tracked (2.673184ms)
+✔ receiving requires approval and detects file corruption before download (36.997134ms)
+✔ oversized offers, out-of-order data and cancelled old chunks are rejected (61.44643ms)
+✔ approved transfers save byte-identical files and advance the queue (43.573088ms)
+✔ command timeout reports uncertainty instead of successful execution (0.969593ms)
+✔ recording streams chunks to the chosen file and finalizes on disconnect (16.399116ms)
+✔ recording write failures never report a successful save (15.978518ms)
+✔ essential touch release gets bounded headroom even when move budget is full (0.684005ms)
+✔ old app telemetry stays unknown, new telemetry expires at consumer and clears on close (0.408071ms)
+✔ pointer frame transport requires a negotiated session and uses bounded move/release budgets (0.515862ms)
+✔ closed clients reject commands and ignore retained late capability callbacks (0.177746ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2655.370819

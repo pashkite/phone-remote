@@ -1,0 +1,27 @@
+{
+  "applied": false,
+  "buildId": "linro-reference-ui-stage7-5",
+  "currentApkDefaultOrigin": "https://galaxy-remote-control.ashkite.chatgpt.site",
+  "existingApprovedOrigins": [
+    "https://galaxy-remote-control.ashkite.chatgpt.site",
+    "https://remote.ashkite.kro.kr"
+  ],
+  "proposal": {
+    "isolation": "separate Sites project and separate D1 database",
+    "sitesProjectId": null,
+    "httpsOrigin": null,
+    "d1Binding": "DB",
+    "d1DatabaseId": null,
+    "authentication": "ChatGPT Sites authentication, unchanged owner policy",
+    "productionDataCopy": false
+  },
+  "requiredUserApprovals": [
+    "Provision a separate QA Sites project and D1 database",
+    "Choose/provision the actual HTTPS QA origin before allowlist review",
+    "Deploy the reviewed branch to QA only",
+    "Review the exact QA origin for both Gradle and runtime policy before rebuilding APK"
+  ],
+  "productionDeploymentAuthorized": false,
+  "newDomainProvisioned": false,
+  "databaseChanged": false
+}

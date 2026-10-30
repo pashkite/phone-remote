@@ -1,0 +1,5 @@
+PASS cancel during delayed session response cannot resurrect a peer
+PASS selecting another device closes the previous device control
+PASS authentication expiry terminates open control and prevents reconnect
+PASS 100 connection cycles release peers, streams, timers and input; listener/heap samples
+PASS wall-clock reading soak stops after hidden/network disconnect

@@ -1,0 +1,30 @@
+{
+  "testApk": {
+    "file": "GalaxyRemote-2.0-stage6-arm64-paneltest.apk",
+    "sha256": "e0d465694df5c59fb1a2384e89ed432d08653265891469c6cc3f43f4697ada92",
+    "bytes": 16317042,
+    "package": "com.galaxyremote.app.paneltest",
+    "label": "Galaxy Remote 2.0 Test",
+    "abi": "arm64-v8a",
+    "signing": "existing Android debug certificate; not a production update",
+    "badging": [
+      "package: name='com.galaxyremote.app.paneltest' versionCode='17' versionName='0.5.3-panel-experiment' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'",
+      "application-label:'Galaxy Remote 2.0 Test'",
+      "native-code: 'arm64-v8a'"
+    ]
+  },
+  "unitTests": {
+    "Debug": {
+      "tests": 16,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "PanelTest": {
+      "tests": 16,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    }
+  }
+}

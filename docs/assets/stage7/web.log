@@ -1,0 +1,202 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ⛅️ wrangler 4.92.0
+───────────────────
+Generating project types...
+
+interface __BaseEnv_Env {
+	DB: D1Database;
+}
+declare namespace Cloudflare {
+	interface Env extends __BaseEnv_Env {}
+}
+interface Env extends __BaseEnv_Env {}
+
+Generating runtime types...
+
+Runtime types generated.
+
+
+✨ Types written to worker-configuration.d.ts
+
+📖 Read about runtime types
+https://developers.cloudflare.com/workers/languages/typescript/#generate-types
+📣 Remember to rerun 'wrangler types' after you change your wrangler.json file.
+
+
+  vinext build  (Vite 8.0.13)
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+[1/5] analyze client references...
+[2K
+transforming...✓ 271 modules transformed.
+rendering chunks...
+✓ built in 560ms
+[2/5] analyze server references...
+[2K
+transforming...✓ 115 modules transformed.
+rendering chunks...
+✓ built in 114ms
+[3/5] build rsc environment...
+[2K
+transforming...✓ 277 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 532ms
+[4/5] build client environment...
+[2K
+transforming...✓ 123 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 294ms
+[5/5] build ssr environment...
+[2K
+transforming...✓ 121 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 505ms
+[0m
+  Route (app)
+  ┌ ƒ /
+  ├ λ /api/build-info
+  ├ λ /api/device/answer
+  ├ λ /api/device/candidate
+  ├ λ /api/device/decision
+  ├ λ /api/device/heartbeat
+  ├ λ /api/device/lease
+  ├ λ /api/device/poll
+  ├ λ /api/device/session
+  ├ λ /api/devices
+  ├ λ /api/devices/:id
+  ├ λ /api/ice
+  ├ λ /api/pairing/complete
+  ├ λ /api/pairing/start
+  ├ λ /api/sessions
+  ├ λ /api/sessions/:id
+  ├ λ /api/sessions/:id/candidate
+  └ λ /api/sessions/:id/offer
+
+  λ API  ƒ Dynamic
+
+  Build complete. Run `vinext start` to start the production server.
+
+Validated Sites artifact: ESM Worker default.fetch and hosting manifest are present.
+✔ session DELETE cannot erase another owner’s ICE candidates (238.257932ms)
+✔ malformed JSON field types fail as 400 instead of crashing handlers (77.738498ms)
+✔ closed device decisions never claim approval/open/rejection success (163.043349ms)
+✔ parallel invalid pairing attempts cannot bypass the 20-attempt window (545.714545ms)
+✔ real handlers complete pairing, consent, SDP, ICE, live lease and revocation in local D1 (525.042736ms)
+✔ expired or superseded pairing codes cannot register a device (95.419579ms)
+✔ changing the configured owner revokes old-owner device polling and live leases (35.625119ms)
+✔ Linro build identity is owner-authenticated, read-only and contains no credentials (1.501449ms)
+✔ brand PNGs contain valid compressed raster data and exact requested dimensions (31.975778ms)
+✔ favicon ICO contains three independently valid 16/32/48 PNG images (1.27524ms)
+✔ manifest references existing assets, branding and a scoped root entry point (15.579193ms)
+✔ Android XML parses, adaptive master paths match and package/display identities remain separate (65.58997ms)
+✔ Linro icon exports retain the approved source and clearly identify derived foreground (11.058231ms)
+✔ cancel aborts in-flight work and rejects responses from a noncompliant late fetch (40.409468ms)
+✔ request timeout is bounded and detaches its parent abort listener (21.701852ms)
+✔ a cancelled attempt cannot cancel a newer connection scope (2.279313ms)
+✔ WASD diagonal is normalized, key repeats ignored and last key-up releases joystick (2.753003ms)
+✔ multiple independent down/move/up/cancel snapshots preserve remaining pointers (0.483494ms)
+✔ single-pointer default refuses simultaneous mapping and explicit multi caps at five (0.450855ms)
+✔ move flood is coalesced into one bounded tick and terminals are immediate (3.874853ms)
+✔ hold heartbeat is bounded and timed tap/long press end without key repeat (2.744506ms)
+✔ profile/mode switch, disconnect and send failure clear all held input and auto work (0.499027ms)
+✔ standard gamepad stick/dpad/buttons map to touch and disconnect releases both (0.93483ms)
+✔ triggers and shoulders use configurable buttons; nonstandard pads never inject (0.441101ms)
+✔ reading keys, click zones, navigation modes and reverse produce bounded commands (0.471617ms)
+✔ wheel storms merge, line/page units clamp and scroll rate stays at most four per second (1.451333ms)
+✔ auto scroll explicit start/pause/resume/stop and manual input safety (0.275894ms)
+✔ auto speed and direction change are effective, error stops generation (0.157126ms)
+✔ profiles are versioned, bounded, sanitized and exclude tokens/content (2.387094ms)
+✔ mode/device/owner namespaces and saved settings remain separate; defaults do not auto-run (0.532287ms)
+✔ joystick normalization clamps coordinates and never depends on pixel resolution (0.143885ms)
+✔ oversized imports still retain all three modes within the profile resource cap (1.720707ms)
+✔ nonfinite input coordinates never turn into a center-screen tap (0.678816ms)
+✔ zoom/pan and fullscreen letterboxing use the actual transformed video rectangle (9.33492ms)
+✔ two standard sticks and custom dpad buttons map independently (0.523664ms)
+✔ wheel sensitivity changes swipe distance and reading profiles accept custom keys (0.225798ms)
+✔ editor rejects duplicates without silently dropping a mapping (1.463722ms)
+✔ editor rejects NaN, infinity, missing and out-of-range normalized coordinates (0.439778ms)
+✔ existing version 1 profiles remain valid; malformed imports warn before overwriting storage (2.51048ms)
+✔ live drag sends down immediately, bounded latest position before up, and keeps touch ID (1.641308ms)
+✔ stationary heartbeat preserves a hold and cancellation is idempotent (0.994069ms)
+✔ send failure stops timer and invokes cleanup instead of replaying a swipe (0.239829ms)
+✔ a retired queued timer cannot transmit movement after pointer release (0.158808ms)
+✔ initial send failure never starts heartbeat or fabricates a held touch (0.209494ms)
+✔ stationary drag does not flood the phone with move packets (0.211086ms)
+✔ opted-in low-latency samples at 16ms and preserves boundaries/heartbeat (0.234331ms)
+✔ detached opacity is visual-only and bounded (1.357683ms)
+✔ detached controls are available only on the main site (0.251507ms)
+✔ main site quality controls keep resolution and frame rate separate (0.28703ms)
+✔ public mode does not retain local preferences (0.199529ms)
+✔ letterbox clicks are rejected and long press reaches Android (0.199189ms)
+✔ accessibility text fallback never treats a placeholder as entered text (0.150676ms)
+✔ connection failures schedule bounded retries (0.16706ms)
+✔ intentional close suppresses reconnect and releases media (0.179239ms)
+✔ detached window listeners and timers are removed (0.238527ms)
+✔ resolution and frame rate are selected independently (0.630705ms)
+✔ coordinate helper remains the UI source of truth (1.084484ms)
+✔ portrait video rejects horizontal letterbox and maps center (0.407651ms)
+✔ landscape video rejects vertical letterbox and maps center (1.332766ms)
+✔ new bounds are used immediately after resize (0.198668ms)
+✔ drag released outside screen clamps to edge and releases pointer capture (2.802367ms)
+✔ pixel threshold preserves small drag on large displays; jitter remains a tap (0.725717ms)
+✔ secondary input cannot overwrite a drag; cancellation sends no gesture (0.374942ms)
+✔ letterbox input is ignored and stationary hold preserves long press (0.294511ms)
+✔ live-capable app receives only one tap for click jitter, with no drag stream (0.363264ms)
+✔ live drag starts only beyond 8 pixels and sends movement before release (0.705607ms)
+✔ blur during live drag cancels input and cannot turn release into a click (0.391542ms)
+✔ binary chunks preserve UUID, absolute byte offset and all byte values (4.195964ms)
+✔ diagnostics reject payloads, tokens, filenames and IPs (76.852266ms)
+✔ old app uses original commands; new app gets IDs and increasing sequence; acknowledgements are tracked (2.599503ms)
+✔ receiving requires approval and detects file corruption before download (39.348795ms)
+✔ oversized offers, out-of-order data and cancelled old chunks are rejected (64.595606ms)
+✔ approved transfers save byte-identical files and advance the queue (53.855355ms)
+✔ command timeout reports uncertainty instead of successful execution (1.78294ms)
+✔ recording streams chunks to the chosen file and finalizes on disconnect (17.314596ms)
+✔ recording write failures never report a successful save (16.278539ms)
+✔ essential touch release gets bounded headroom even when move budget is full (0.745817ms)
+✔ old app telemetry stays unknown, new telemetry expires at consumer and clears on close (0.37337ms)
+✔ pointer frame transport requires a negotiated session and uses bounded move/release budgets (0.48771ms)
+✔ closed clients reject commands and ignore retained late capability callbacks (0.237856ms)
+✔ audio startup completing after disconnect cannot send or retain an AudioContext (1.154209ms)
+✔ Alt+R/H/B map to recent apps/home/back and repeated keys do not resend (1.130293ms)
+✔ function keys, browser modifiers, IME and editable fields remain untouched (0.162232ms)
+✔ production console preserves owner access and removes temporary preview metadata (168.931748ms)
+✔ metrics use selected pair, interval loss, codec, bitrate and per-frame delays (1.268039ms)
+✔ counter reset, new RTP stream, missing stats and background gaps remain unknown (0.189704ms)
+✔ freeze requires elapsed time and resets when frames resume (0.220009ms)
+✔ auto degrades only after sustained trouble and respects minimum interval (0.345367ms)
+✔ auto restores only after 20 stable samples; no oscillation for missing/static data (0.233319ms)
+✔ thermal/encoder pressure and old clients select supported limits; stale telemetry is ignored (0.229273ms)
+✔ sender telemetry validates untrusted values and does not invent hardware status (0.213109ms)
+✔ VP8 remains baseline and H264 opt-in retains fallback (0.76117ms)
+✔ unsupported low-buffer hints do not break negotiation (0.392237ms)
+✔ a failed H264 first-frame path falls back once, never on an already visible video (0.292928ms)
+ℹ tests 94
+ℹ suites 0
+ℹ pass 94
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3290.336252
+test_missing_badging_or_certificate_is_rejected (test_apk_identity.ApkIdentityTest.test_missing_badging_or_certificate_is_rejected) ... ok
+test_signature_or_package_change_never_becomes_an_update (test_apk_identity.ApkIdentityTest.test_signature_or_package_change_never_becomes_an_update) ... ok
+test_invalid_and_empty_measurements_are_rejected (test_latency_summary.LatencySummaryTest.test_invalid_and_empty_measurements_are_rejected) ... ok
+test_tail_latency_is_not_average_or_network_rtt (test_latency_summary.LatencySummaryTest.test_tail_latency_is_not_average_or_network_rtt) ... ok
+test_default_is_read_only (test_panel_preflight.PreflightSafetyTest.test_default_is_read_only) ... ok
+test_explicit_probe_only_restores_fixed_display (test_panel_preflight.PreflightSafetyTest.test_explicit_probe_only_restores_fixed_display) ... ok
+test_missing_recovery_fails_closed (test_panel_preflight.PreflightSafetyTest.test_missing_recovery_fails_closed) ... ok
+test_power_on_firmware_is_supported (test_panel_preflight.PreflightSafetyTest.test_power_on_firmware_is_supported) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.006s
+
+OK

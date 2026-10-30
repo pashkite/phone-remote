@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const device = await authenticateDevice(request);
   if (!device) return apiError("등록되지 않은 기기입니다.", 401);
   const payload = await readJson<AnswerPayload>(request);
-  if (!payload?.sessionId || payload.type !== "answer" || !payload.sdp || payload.sdp.length > 250_000) {
+  if (typeof payload?.sessionId !== "string" || !payload.sessionId || payload.type !== "answer" || typeof payload.sdp !== "string" || !payload.sdp || payload.sdp.length > 250_000) {
     return apiError("올바른 연결 응답이 아닙니다.");
   }
 

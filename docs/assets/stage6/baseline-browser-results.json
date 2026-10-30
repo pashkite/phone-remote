@@ -1,0 +1,17 @@
+[
+  {
+    "name": "cancel during delayed session response cannot resurrect a peer",
+    "status": "FAIL",
+    "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+  },
+  {
+    "name": "selecting another device closes the previous device control",
+    "status": "FAIL",
+    "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'connected'\n- 'closed'\n"
+  },
+  {
+    "name": "authentication expiry terminates open control and prevents reconnect",
+    "status": "FAIL",
+    "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'connected'\n- 'closed'\n"
+  }
+]

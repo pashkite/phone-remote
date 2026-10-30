@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const device = await authenticateDevice(request);
   if (!device) return apiError("등록되지 않은 기기입니다.", 401);
   const payload = await readJson<SessionPayload>(request);
-  const sessionId = payload?.sessionId?.trim();
+  const sessionId = (typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "");
   if (!sessionId) return apiError("연결 요청 ID가 필요합니다.");
 
   const db = await getDb();

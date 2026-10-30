@@ -29,13 +29,13 @@ class RemoteControlService : Service() {
     @Volatile
     private var webRtcSession: WebRtcSession? = null
     private var projectionPermission: Intent? = null
-    private var currentSessionId: String? = null
+    @Volatile private var currentSessionId: String? = null
     private var candidatePollFuture: ScheduledFuture<*>? = null
     private var candidatePollCount = 0
-    private var connected = false
+    @Volatile private var connected = false
     private var leaseFuture: ScheduledFuture<*>? = null
     private var lastLeaseSuccess = 0L
-    private var shuttingDown = false
+    @Volatile private var shuttingDown = false
     private var finishingSession = false
     private var started = false
 
@@ -63,10 +63,11 @@ class RemoteControlService : Service() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        webRtcSession?.setQuality(1080, 30)
+        webRtcSession?.refreshCapture()
     }
 
     override fun onDestroy() {
+        com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
         if (!shuttingDown) shuttingDown = true
         preferences.standbyActive = false
         candidatePollFuture?.cancel(true)
@@ -143,6 +144,9 @@ class RemoteControlService : Service() {
             ?.takeIf(String::isNotBlank)
             ?: return
         candidatePollFuture?.cancel(false)
+        leaseFuture?.cancel(false); leaseFuture = null
+        com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
+        synchronized(webRtcLock) { webRtcSession?.closePeer() }
         currentSessionId = sessionId
         seenRemoteCandidates.clear()
         candidatePollCount = 0
@@ -164,9 +168,10 @@ class RemoteControlService : Service() {
             ApiClient(credentials).decideSession(sessionId, "approve")
         } catch (error: Throwable) {
             rethrowIfFatal(error)
-            failSession("연결 요청 승인", error)
+            if (currentSessionId == sessionId && !shuttingDown) failSession("연결 요청 승인", error)
             return
         }
+        if (currentSessionId != sessionId || shuttingDown) return
         val session = response.optJSONObject("session")
         val offerSdp = session?.optString("offerSdp").orEmpty()
         if (offerSdp.isBlank()) {
@@ -203,6 +208,7 @@ class RemoteControlService : Service() {
                 onAnswerReady = ::submitAnswer,
                 onLocalCandidate = ::submitCandidate,
                 onConnectionState = { isConnected, message ->
+                    com.galaxyremote.app.display.DisplayControl.sessionConnected(isConnected)
                     connected = isConnected
                     sendStatus(message, true)
                     updateNotification(message, isConnected)
@@ -234,7 +240,7 @@ class RemoteControlService : Service() {
                     ApiClient(credentials).submitAnswer(sessionId, sdp)
                     sendStatus("PC가 보안 연결을 완료하는 중이에요.", true)
                 } catch (error: Exception) {
-                    failSession("PC 연결 응답 전송", error)
+                    if (currentSessionId == sessionId && !shuttingDown) failSession("PC 연결 응답 전송", error)
                 }
             }
         } catch (_: RejectedExecutionException) {
@@ -284,7 +290,7 @@ class RemoteControlService : Service() {
         } catch (_: Exception) {
             return
         }
-        applyRemoteCandidates(response.optJSONArray("candidates") ?: JSONArray())
+        if (currentSessionId == sessionId && !shuttingDown) applyRemoteCandidates(response.optJSONArray("candidates") ?: JSONArray())
     }
 
     private fun applyRemoteCandidates(candidates: JSONArray) {
@@ -320,7 +326,7 @@ class RemoteControlService : Service() {
             "clipboardSet" -> {
                 val text = command.optString("text")
                 if (text.toByteArray(Charsets.UTF_8).size > 65536) { finish(false, "CLIPBOARD_TOO_LARGE"); return }
-                try { getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("Galaxy Remote", text)); finish(true, null) }
+                try { getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("린로", text)); finish(true, null) }
                 catch (_: Exception) { finish(false, "CLIPBOARD_ACCESS_RESTRICTED") }
             }
             "clipboardPaste" -> {
@@ -340,7 +346,7 @@ class RemoteControlService : Service() {
             }
             "quality", "volume" -> { val success = handleControl(command); finish(success, if (success) null else "SESSION_INACTIVE") }
             "text", "key" -> if (RemoteKeyboardService.dispatch(command)) finish(true, null) else RemoteAccessibilityService.dispatchWithResult(command, finish)
-            "touch", "tap", "longPress", "swipe", "global" -> RemoteAccessibilityService.dispatchWithResult(command, finish)
+            "pointerFrame", "touch", "tap", "longPress", "swipe", "global" -> RemoteAccessibilityService.dispatchWithResult(command, finish)
             else -> finish(false, "UNSUPPORTED_COMMAND")
         }
     }
@@ -406,7 +412,7 @@ class RemoteControlService : Service() {
         )
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_remote)
-            .setContentTitle(if (isConnected) "Galaxy Remote 연결됨" else "Galaxy Remote 화면 공유")
+            .setContentTitle(if (isConnected) "린로 연결됨" else "린로 화면 공유")
             .setContentText(message)
             .setContentIntent(openIntent)
             .setOngoing(true)
@@ -455,6 +461,7 @@ class RemoteControlService : Service() {
     private fun shutdown(message: String) {
         if (shuttingDown) return
         shuttingDown = true
+        com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
         preferences.standbyActive = false
         sendStatus(message, false)
         candidatePollFuture?.cancel(true)
@@ -467,6 +474,7 @@ class RemoteControlService : Service() {
     private fun finishRemoteSession(message: String) {
         if (shuttingDown || finishingSession) return
         finishingSession = true
+        com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
         candidatePollFuture?.cancel(false)
         candidatePollFuture = null
         leaseFuture?.cancel(false); leaseFuture = null
@@ -516,5 +524,6 @@ class RemoteControlService : Service() {
         private var projectionReady = false
 
         fun isProjectionReady(): Boolean = projectionReady
+        fun isRemoteConnected(): Boolean = activeInstance?.connected == true
     }
 }

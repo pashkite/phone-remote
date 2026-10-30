@@ -1,0 +1,44 @@
+✔ binary chunks preserve UUID, absolute byte offset and all byte values (2.792012ms)
+✔ diagnostics reject payloads, tokens, filenames and IPs (49.4686ms)
+✔ old app uses original commands; new app gets IDs and increasing sequence; acknowledgements are tracked (2.162969ms)
+✔ receiving requires approval and detects file corruption before download (39.321478ms)
+✔ oversized offers, out-of-order data and cancelled old chunks are rejected (62.514959ms)
+✔ approved transfers save byte-identical files and advance the queue (60.577753ms)
+✔ command timeout reports uncertainty instead of successful execution (1.413066ms)
+✔ recording streams chunks to the chosen file and finalizes on disconnect (17.500261ms)
+✔ recording write failures never report a successful save (16.804102ms)
+✔ essential touch release gets bounded headroom even when move budget is full (0.792236ms)
+✔ old app telemetry stays unknown, new telemetry expires at consumer and clears on close (0.451436ms)
+✔ pointer frame transport requires a negotiated session and uses bounded move/release budgets (0.369793ms)
+✖ closed clients reject commands and ignore retained late capability callbacks (1.662731ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 12
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 932.929671
+
+✖ failing tests:
+
+test at tests/remote-protocol.test.mjs:126:1
+✖ closed clients reject commands and ignore retained late capability callbacks (1.662731ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///workspace/phone-remote/tests/remote-protocol.test.mjs:129:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

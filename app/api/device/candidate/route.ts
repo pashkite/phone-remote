@@ -14,8 +14,8 @@ export async function POST(request: Request) {
   const device = await authenticateDevice(request);
   if (!device) return apiError("등록되지 않은 기기입니다.", 401);
   const payload = await readJson<CandidatePayload>(request);
-  const sessionId = payload?.sessionId?.trim();
-  const candidate = payload?.candidate?.trim() ?? "";
+  const sessionId = (typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "");
+  const candidate = typeof payload?.candidate === "string" ? payload.candidate.trim() : "";
   if (!sessionId || !candidate || candidate.length > 8_192) {
     return apiError("올바른 ICE 후보가 아닙니다.");
   }

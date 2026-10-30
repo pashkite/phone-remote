@@ -75,7 +75,7 @@ export async function authenticateDevice(request: Request) {
     .where(eq(devices.id, deviceId))
     .limit(1);
 
-  if (!device) return null;
+  if (!device || !isAllowedOwnerEmail(device.ownerEmail)) return null;
   const candidateHash = await sha256Hex(token);
   return constantTimeEqual(candidateHash, device.tokenHash) ? device : null;
 }

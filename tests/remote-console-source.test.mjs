@@ -14,7 +14,7 @@ const webRtcSession = await readFile(
 
 test("detached opacity is visual-only and bounded", () => {
   assert.match(source, /aria-label="분리 창 투명도"/);
-  assert.match(source, /style=\{\{ opacity: detachedOpacity \/ 100 \}\}/);
+  assert.match(source, /style=\{\{ opacity: detachedOpacity \/ 100,/);
   assert.match(source, /<option value=\{25\}>투명도 25%<\/option>/);
   assert.match(source, /<option value=\{100\}>투명도 100%<\/option>/);
 });
@@ -74,9 +74,9 @@ test("resolution and frame rate are selected independently", () => {
   assert.match(source, /aria-label="화면 해상도"/);
   assert.match(source, /aria-label="화면 프레임"/);
   assert.match(source, /shortEdge: resolution, fps: next/);
-  assert.match(source, /shortEdge: next, fps: frameRate/);
+  assert.match(source, /shortEdge: next, fps: next === 1440 \? Math.min\(frameRate, 30\) : frameRate/);
   assert.match(source, /shortEdge: resolutionRef\.current, fps: frameRateRef\.current/);
   assert.match(webRtcSession, /fun setQuality\(shortEdge: Int, fps: Int\)/);
-  assert.match(webRtcSession, /ALLOWED_SHORT_EDGES = setOf\(540, 1080, 1440\)/);
-  assert.match(webRtcSession, /ALLOWED_FRAME_RATES = setOf\(24, 30, 60\)/);
+  assert.match(webRtcSession, /requestedQuality = StreamQuality.resolve\(shortEdge, fps\)/);
+  assert.match(webRtcSession, /encoding.maxFramerate = StreamQuality.DEFAULT.fps/);
 });

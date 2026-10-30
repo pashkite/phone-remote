@@ -1,0 +1,4 @@
+PASS real API device cards, empty video, navigation, registration and focus return
+PASS live navigation commands and capability-gated tools
+PASS fit/zoom, manual quality, theme and mode changes retain the same peer and video
+PASS small-screen device drawer, settings, disconnect and honest unknown states

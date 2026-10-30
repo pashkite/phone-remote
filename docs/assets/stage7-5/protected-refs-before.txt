@@ -1,0 +1,5 @@
+3f853b455594d14e26565e789dbc56124c4bae10	refs/heads/assets/linro-brand-reference
+b4a35e622aee65348da65c2989cd331771cbfa14	refs/heads/feature/galaxy-remote-2-integration-qa
+2b60ee1bbe166d70c5774502a1ed4fd5ec95c805	refs/heads/feature/linro-device-test-preparation
+cb9666b42d1bc3a2cc241097e7014d228f35c4d5	refs/heads/main
+e3025397a344cfdc197f78637b88ae88e274ab37	refs/heads/master

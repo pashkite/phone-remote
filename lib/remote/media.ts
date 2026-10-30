@@ -13,7 +13,7 @@ export async function screenshot(video: HTMLVideoElement | null) {
   if (!ctx) throw new Error("이미지를 만들 수 없습니다.");
   ctx.drawImage(video, 0, 0);
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("PNG 저장 실패")), "image/png"));
-  downloadBlob(blob, `GalaxyRemote-${timestamp()}.png`);
+  downloadBlob(blob, `Linro-${timestamp()}.png`);
 }
 export class ScreenRecording {
   private recorder: MediaRecorder | null = null;
@@ -32,7 +32,7 @@ export class ScreenRecording {
     const mime = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find(m => MediaRecorder.isTypeSupported(m));
     if (!mime) throw new Error("지원되는 녹화 형식이 없습니다.");
     this.starting = true; this.cancelled = false;
-    const name = `GalaxyRemote-${timestamp()}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}`;
+    const name = `Linro-${timestamp()}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}`;
     try {
       const picker = (window as Window & { showSaveFilePicker?: (options: { suggestedName: string }) => Promise<{ createWritable(): Promise<FileSystemWritableFileStream> }> }).showSaveFilePicker;
       if (picker) this.writer = await (await picker.call(window, { suggestedName: name })).createWritable();
@@ -97,5 +97,5 @@ export class PcmPlayer {
     this.next = Math.max(this.next, ctx.currentTime + .02);
     source.start(this.next); this.next += buffer.duration;
   }
-  close() { void this.context?.close(); this.context = null; this.destination = null; this.gain = null; }
+  close() { void this.context?.close().catch(() => {}); this.context = null; this.destination = null; this.gain = null; }
 }

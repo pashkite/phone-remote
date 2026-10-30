@@ -1,0 +1,1 @@
+PASS: simulated WebRTC kept across modes; WASD/multi snapshots, editor isolation, gamepad mapping, reading keys, auto pause/resume/stop, zoom/fit, rotation/error release, focus-safe gamepad and personal/public profile restoration. Real Android behavior UNVERIFIED.

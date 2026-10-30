@@ -1,0 +1,503 @@
+{
+  "version": 1,
+  "mode": "webtoon",
+  "selected": {
+    "game": "game-default",
+    "novel": "novel-default",
+    "webtoon": "webtoon-default"
+  },
+  "profiles": [
+    {
+      "id": "game-default",
+      "name": "내 저장 게임",
+      "mode": "game",
+      "mappingEnabled": false,
+      "experimentalMulti": false,
+      "gamepadEnabled": false,
+      "joystick": {
+        "x": 0.22,
+        "y": 0.76,
+        "radius": 0.1
+      },
+      "lookStick": {
+        "enabled": false,
+        "x": 0.72,
+        "y": 0.4,
+        "radius": 0.1
+      },
+      "bindings": [
+        {
+          "id": "attack",
+          "key": "KeyF",
+          "x": 0.63,
+          "y": 0.75,
+          "size": 0.09,
+          "action": "hold"
+        },
+        {
+          "id": "skill",
+          "key": "KeyE",
+          "x": 0.88,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-0",
+          "key": "Pad0",
+          "x": 0.7,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-1",
+          "key": "Pad1",
+          "x": 0.7899999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-2",
+          "key": "Pad2",
+          "x": 0.8799999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-3",
+          "key": "Pad3",
+          "x": 0.7,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-4",
+          "key": "Pad4",
+          "x": 0.7899999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-5",
+          "key": "Pad5",
+          "x": 0.8799999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-6",
+          "key": "Pad6",
+          "x": 0.7,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-7",
+          "key": "Pad7",
+          "x": 0.7899999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-8",
+          "key": "Pad8",
+          "x": 0.8799999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-9",
+          "key": "Pad9",
+          "x": 0.7,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-10",
+          "key": "Pad10",
+          "x": 0.7899999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-11",
+          "key": "Pad11",
+          "x": 0.8799999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-16",
+          "key": "Pad16",
+          "x": 0.7899999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        }
+      ],
+      "sensitivity": 1,
+      "quality": {
+        "edge": 1080,
+        "fps": 30,
+        "auto": false
+      },
+      "reading": {
+        "navigation": "vertical",
+        "reverse": false,
+        "clickPages": false,
+        "leftZone": 0.3,
+        "rightZone": 0.7,
+        "distance": 0.42,
+        "speed": 1,
+        "autoSpeed": 0.5,
+        "autoDirection": 1,
+        "shortcut": "KeyP",
+        "nextKey": "PageDown",
+        "previousKey": "PageUp"
+      },
+      "zoom": 1,
+      "minimal": false,
+      "applyQualityOnSelect": false
+    },
+    {
+      "id": "novel-default",
+      "name": "기본 소설",
+      "mode": "novel",
+      "mappingEnabled": false,
+      "experimentalMulti": false,
+      "gamepadEnabled": false,
+      "joystick": {
+        "x": 0.22,
+        "y": 0.76,
+        "radius": 0.1
+      },
+      "lookStick": {
+        "enabled": false,
+        "x": 0.72,
+        "y": 0.4,
+        "radius": 0.1
+      },
+      "bindings": [
+        {
+          "id": "attack",
+          "key": "KeyF",
+          "x": 0.8,
+          "y": 0.75,
+          "size": 0.09,
+          "action": "hold"
+        },
+        {
+          "id": "skill",
+          "key": "KeyE",
+          "x": 0.88,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-0",
+          "key": "Pad0",
+          "x": 0.7,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-1",
+          "key": "Pad1",
+          "x": 0.7899999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-2",
+          "key": "Pad2",
+          "x": 0.8799999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-3",
+          "key": "Pad3",
+          "x": 0.7,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-4",
+          "key": "Pad4",
+          "x": 0.7899999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-5",
+          "key": "Pad5",
+          "x": 0.8799999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-6",
+          "key": "Pad6",
+          "x": 0.7,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-7",
+          "key": "Pad7",
+          "x": 0.7899999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-8",
+          "key": "Pad8",
+          "x": 0.8799999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-9",
+          "key": "Pad9",
+          "x": 0.7,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-10",
+          "key": "Pad10",
+          "x": 0.7899999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-11",
+          "key": "Pad11",
+          "x": 0.8799999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-16",
+          "key": "Pad16",
+          "x": 0.7899999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        }
+      ],
+      "sensitivity": 1,
+      "quality": {
+        "edge": 1080,
+        "fps": 30,
+        "auto": false
+      },
+      "reading": {
+        "navigation": "vertical",
+        "reverse": false,
+        "clickPages": false,
+        "leftZone": 0.3,
+        "rightZone": 0.7,
+        "distance": 0.42,
+        "speed": 1,
+        "autoSpeed": 0.5,
+        "autoDirection": 1,
+        "shortcut": "KeyP",
+        "nextKey": "PageDown",
+        "previousKey": "PageUp"
+      },
+      "zoom": 1,
+      "minimal": false,
+      "applyQualityOnSelect": false
+    },
+    {
+      "id": "webtoon-default",
+      "name": "기본 웹툰",
+      "mode": "webtoon",
+      "mappingEnabled": false,
+      "experimentalMulti": false,
+      "gamepadEnabled": false,
+      "joystick": {
+        "x": 0.22,
+        "y": 0.76,
+        "radius": 0.1
+      },
+      "lookStick": {
+        "enabled": false,
+        "x": 0.72,
+        "y": 0.4,
+        "radius": 0.1
+      },
+      "bindings": [
+        {
+          "id": "attack",
+          "key": "KeyF",
+          "x": 0.8,
+          "y": 0.75,
+          "size": 0.09,
+          "action": "hold"
+        },
+        {
+          "id": "skill",
+          "key": "KeyE",
+          "x": 0.88,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-0",
+          "key": "Pad0",
+          "x": 0.7,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-1",
+          "key": "Pad1",
+          "x": 0.7899999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-2",
+          "key": "Pad2",
+          "x": 0.8799999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-3",
+          "key": "Pad3",
+          "x": 0.7,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-4",
+          "key": "Pad4",
+          "x": 0.7899999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-5",
+          "key": "Pad5",
+          "x": 0.8799999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-6",
+          "key": "Pad6",
+          "x": 0.7,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-7",
+          "key": "Pad7",
+          "x": 0.7899999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-8",
+          "key": "Pad8",
+          "x": 0.8799999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-9",
+          "key": "Pad9",
+          "x": 0.7,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-10",
+          "key": "Pad10",
+          "x": 0.7899999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-11",
+          "key": "Pad11",
+          "x": 0.8799999999999999,
+          "y": 0.72,
+          "size": 0.08,
+          "action": "hold"
+        },
+        {
+          "id": "pad-16",
+          "key": "Pad16",
+          "x": 0.7899999999999999,
+          "y": 0.6,
+          "size": 0.08,
+          "action": "hold"
+        }
+      ],
+      "sensitivity": 1,
+      "quality": {
+        "edge": 1080,
+        "fps": 30,
+        "auto": false
+      },
+      "reading": {
+        "navigation": "vertical",
+        "reverse": false,
+        "clickPages": false,
+        "leftZone": 0.3,
+        "rightZone": 0.7,
+        "distance": 0.42,
+        "speed": 1,
+        "autoSpeed": 0.5,
+        "autoDirection": 1,
+        "shortcut": "KeyP",
+        "nextKey": "PageDown",
+        "previousKey": "PageUp"
+      },
+      "zoom": 1.4,
+      "minimal": false,
+      "applyQualityOnSelect": false
+    }
+  ]
+}

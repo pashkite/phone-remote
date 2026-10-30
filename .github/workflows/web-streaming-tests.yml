@@ -1,0 +1,83 @@
+name: Web streaming regression tests
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "tests/**"
+      - "scripts/**"
+      - "assets/brand/**"
+      - "public/brand/**"
+      - "public/favicon*"
+      - "public/manifest.webmanifest"
+      - ".github/workflows/web-streaming-tests.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: bash scripts/sites-env.sh -- bash scripts/install-ci.sh
+      - run: npm run lint
+      - name: Full web and API regression
+        run: |
+          set -o pipefail
+          mkdir -p outputs/integration-qa
+          bash scripts/test-web-streaming.sh 2>&1 | tee outputs/integration-qa/web-tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: galaxy-remote-web-qa-reports
+          path: outputs/integration-qa/
+          retention-days: 7
+  browser-interactions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: bash scripts/sites-env.sh -- bash scripts/install-ci.sh
+      - run: npm install --prefix /tmp/galaxy-browser --no-audit --no-fund playwright@1.56.1
+      - run: /tmp/galaxy-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Start local test server
+        run: |
+          bash scripts/sites-env.sh -- npm run dev -- --port 5175 > /tmp/galaxy-browser-dev.log 2>&1 &
+          node --input-type=module <<'JS'
+          for (let i = 0; i < 60; i++) {
+            try { if ((await fetch('http://127.0.0.1:5175')).ok) process.exit(0); } catch {}
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          throw new Error('Local server did not become ready');
+          JS
+      - name: Browser and protocol simulation (no real Android device)
+        env:
+          PLAYWRIGHT_MODULE: /tmp/galaxy-browser/node_modules/playwright/index.mjs
+        run: |
+          node scripts/test-interaction-browser.mjs
+          node scripts/test-ux-branding-browser.mjs
+          QA_SOAK_SECONDS=300 node scripts/test-integration-browser.mjs
+          node scripts/test-network-browser.mjs
+          node scripts/test-linro-preparation-browser.mjs
+          node scripts/test-reference-ui-browser.mjs
+          node scripts/test-webrtc-loopback-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: galaxy-remote-browser-qa-reports
+          path: |
+            outputs/integration-qa/
+            outputs/ux-branding/after/
+            outputs/linro-stage7/
+            outputs/reference-ui/
+            /tmp/galaxy-browser-dev.log
+          retention-days: 7

@@ -6,7 +6,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { pathToFileURL } from 'node:url';
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'remote-tests-'));
-for (const name of ['protocol','diagnostics','media','files','client']) {
+for (const name of ['protocol','diagnostics','media','files','streaming','client']) {
  const code=ts.transpileModule(fs.readFileSync(new URL(`../lib/remote/${name}.ts`,import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText.replace(/from "\.\/(\w+)"/g,'from "./$1.mjs"');
  fs.writeFileSync(path.join(tmp,`${name}.mjs`),code);
 }
@@ -17,6 +17,7 @@ const {FileTransfer}=await import(pathToFileURL(path.join(tmp,'files.mjs')));
 class Channel {
  readyState='open';bufferedAmount=0;sent=[];onmessage=null;
  send(data){this.sent.push(data);}
+ close(){this.readyState='closed';}
  message(data){this.onmessage?.({data:typeof data==='object'&&!(data instanceof ArrayBuffer)?JSON.stringify(data):data});}
 }
 const tick=()=>new Promise(r=>setTimeout(r,15));
@@ -42,12 +43,15 @@ test('old app uses original commands; new app gets IDs and increasing sequence; 
  control.message({type:'ack',v:1,id:m.id,status:'completed'});assert.match(snapshot.result,/처리 완료/);
  assert.doesNotMatch(client.diagnostics.export(),/한글|abc/);client.close();
 });
-test('receiving requires approval and detects file corruption before download',async()=>{
- const channel=new Channel();let offer;let status;const files=new FileTransfer(channel,s=>status=s,o=>offer=o);
+test('receiving requires approval and detects file corruption before download',async t=>{
+ const channel=new Channel();let offer;let status;const files=new FileTransfer(channel,s=>status=s,o=>offer=o);t.after(()=>files.close());
  const payload=new TextEncoder().encode('한글🙂\nbytes').buffer;
  channel.message({v:1,type:'offer',id,name:'../../test.txt',size:payload.byteLength,hash:await sha256(payload)});await tick();assert.ok(offer);assert.ok(!offer.name.includes('/'));assert.equal(channel.sent.length,0);
  files.accept();const bad=payload.slice(0);new Uint8Array(bad)[0]^=1;
- channel.message(encodeChunk(id,0,bad));channel.message({v:1,type:'end',id});await tick();assert.match(status,/중단/);assert.equal(JSON.parse(channel.sent.at(-1)).type,'cancel');files.close();
+ channel.message(encodeChunk(id,0,bad));channel.message({v:1,type:'end',id});
+ // SHA-256 completes asynchronously; a fixed 15ms sleep races under parallel build load.
+ const deadline=performance.now()+2000;while(!status?.includes('중단')&&performance.now()<deadline)await tick();
+ assert.match(status,/중단/);assert.equal(JSON.parse(channel.sent.at(-1)).type,'cancel');files.close();
 });
 test('oversized offers, out-of-order data and cancelled old chunks are rejected',async()=>{
  const channel=new Channel();let status;const files=new FileTransfer(channel,s=>status=s,()=>{});
@@ -94,4 +98,41 @@ test('recording write failures never report a successful save',async t=>{
  globalThis.MediaRecorder=class {static isTypeSupported(){return true;}state='inactive';constructor(){recorders.push(this);}start(){this.state='recording';}stop(){this.state='inactive';this.onstop?.();}pause(){this.state='paused';}resume(){this.state='recording';}};
  const recording=new ScreenRecording(m=>message=m);await recording.start({getVideoTracks:()=>[{readyState:'live'}]});const recorder=recorders[0];recorder.ondataavailable({data:new Blob(['partial'])});await tick();
  assert.match(message,/오류/);assert.doesNotMatch(message,/저장했습니다/);
+});
+
+test('essential touch release gets bounded headroom even when move budget is full',()=>{
+ const channel=new Channel();const client=new RemoteClient(channel,{},()=>null,()=>null);
+ channel.message({type:'capabilities',v:1,features:['liveTouch']});channel.bufferedAmount=3000;
+ assert.equal(client.sendTouch({phase:'move'}),false);assert.equal(client.sendTouch({phase:'up'}),true);
+ assert.equal(client.sendTouch({phase:'cancel'}),true);channel.bufferedAmount=70000;
+ assert.equal(client.sendTouch({phase:'up'}),false);client.close();
+});
+test('old app telemetry stays unknown, new telemetry expires at consumer and clears on close',()=>{
+ const channel=new Channel();const client=new RemoteClient(channel,{},()=>null,()=>null);
+ assert.equal(client.senderMetrics,null);channel.message({type:'streamMetrics',v:1,data:{captureFps:60,sendFps:30,encodeMs:2}});
+ assert.equal(client.senderMetrics.sendFps,30);assert.equal(client.senderMetrics.hardwareEncoder,null);
+ client.close();assert.equal(client.senderMetrics,null);
+});
+
+test('pointer frame transport requires a negotiated session and uses bounded move/release budgets',()=>{
+ const channel=new Channel();const client=new RemoteClient(channel,{},()=>null,()=>null);
+ const point={pointerId:'p1',phase:'down',x:.5,y:.5};assert.equal(client.sendPointerFrame([point]),false);
+ channel.message({type:'capabilities',v:1,inputSessionId:id,features:['multiTouchExperimental']});
+ assert.equal(client.sendPointerFrame([point]),true);const first=JSON.parse(channel.sent.at(-1));assert.equal(first.sessionId,id);assert.equal(first.pointerSeq,1);
+ channel.bufferedAmount=3000;assert.equal(client.sendPointerFrame([{...point,phase:'move'}]),false);assert.equal(client.sendPointerFrame([{...point,phase:'up'}]),true);
+ const second=JSON.parse(channel.sent.at(-1));assert.equal(second.pointerSeq,2);assert.equal(client.sendPointerFrame(Array(6).fill(point)),false);
+ client.close();assert.equal(client.inputSessionId,null);
+});
+
+test('closed clients reject commands and ignore retained late capability callbacks',()=>{
+ const channel=new Channel();let opened=0;const client=new RemoteClient(channel,{createDataChannel(){opened++;return new Channel();}},()=>null,()=>null);
+ const late=channel.onmessage;client.close();
+ assert.equal(client.send({type:'global',action:'home'}),false);
+ late({data:JSON.stringify({type:'capabilities',v:1,features:['commandAck','files','pcmAudio']})});
+ assert.equal(client.supports('files'),false);assert.equal(opened,0);client.close();
+});
+test('audio startup completing after disconnect cannot send or retain an AudioContext',async t=>{
+ const old=globalThis.AudioContext;t.after(()=>{if(old===undefined)delete globalThis.AudioContext;else globalThis.AudioContext=old;});let resume;let closed=0;
+ globalThis.AudioContext=class {destination={};createGain(){return {connect(){},gain:{value:1}};}createMediaStreamDestination(){return {stream:{getAudioTracks:()=>[]}};}resume(){return new Promise(r=>resume=r);}close(){closed++;return Promise.resolve();}};
+ const channel=new Channel(),client=new RemoteClient(channel,{createDataChannel(){return new Channel();}},()=>null,()=>null);const starting=client.toggleAudio();client.close();resume();await assert.rejects(starting,/연결 종료/);assert.equal(channel.sent.length,0);assert.equal(closed,1);
 });

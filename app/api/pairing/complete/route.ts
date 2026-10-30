@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { devices, pairingCodes, pairingRateLimits } from "../../../../db/schema";
 import {
@@ -21,41 +21,22 @@ export async function POST(request: Request) {
   const db = await getDb();
   const now = Date.now();
   const rateLimitKey = `pair:${await clientFingerprint(request)}`;
-  const [rateLimit] = await db
-    .select()
-    .from(pairingRateLimits)
-    .where(eq(pairingRateLimits.key, rateLimitKey))
-    .limit(1);
-  if (rateLimit && now - rateLimit.windowStartedAt < 10 * 60 * 1000 && rateLimit.attempts >= 20) {
-    return Response.json(
-      { error: "등록 시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요." },
-      { status: 429, headers: { "Retry-After": "600" } },
-    );
-  }
-  if (!rateLimit) {
-    await db
-      .insert(pairingRateLimits)
-      .values({
-        key: rateLimitKey,
-        windowStartedAt: now,
-        attempts: 1,
-        updatedAt: now,
-      })
-      .onConflictDoNothing();
-  } else if (now - rateLimit.windowStartedAt >= 10 * 60 * 1000) {
-    await db
-      .update(pairingRateLimits)
-      .set({ windowStartedAt: now, attempts: 1, updatedAt: now })
-      .where(eq(pairingRateLimits.key, rateLimitKey));
-  } else {
-    await db
-      .update(pairingRateLimits)
-      .set({ attempts: rateLimit.attempts + 1, updatedAt: now })
-      .where(eq(pairingRateLimits.key, rateLimitKey));
-  }
+  // One SQLite statement owns both increment and window rollover under concurrency.
+  const [rateLimit] = await db.insert(pairingRateLimits).values({
+    key: rateLimitKey, windowStartedAt: now, attempts: 1, updatedAt: now,
+  }).onConflictDoUpdate({target: pairingRateLimits.key, set: {
+    windowStartedAt: sql`CASE WHEN ${pairingRateLimits.windowStartedAt} <= ${now - 600000} THEN ${now} ELSE ${pairingRateLimits.windowStartedAt} END`,
+    attempts: sql`CASE WHEN ${pairingRateLimits.windowStartedAt} <= ${now - 600000} THEN 1 ELSE ${pairingRateLimits.attempts} + 1 END`,
+    updatedAt: now,
+  }}).returning({attempts: pairingRateLimits.attempts});
+  if (!rateLimit || rateLimit.attempts > 20) return Response.json(
+    { error: "등록 시도가 너무 많습니다. 10분 뒤 다시 시도해 주세요." },
+    { status: 429, headers: { "Retry-After": "600" } },
+  );
 
   const payload = await readJson<PairingRequest>(request);
-  const code = payload?.code?.replace(/\D/g, "") ?? "";
+  if (payload && (["name", "platform", "appVersion"] as const).some(key => payload[key] !== undefined && typeof payload[key] !== "string")) return apiError("기기 정보는 문자열이어야 합니다.");
+  const code = typeof payload?.code === "string" ? payload.code.replace(/\D/g, "") : "";
   if (!/^\d{6}$/.test(code)) return apiError("6자리 등록 코드를 입력해 주세요.");
 
   const [pairing] = await db
@@ -81,8 +62,8 @@ export async function POST(request: Request) {
     id: deviceId,
     ownerEmail: pairing.ownerEmail,
     name: safeDeviceName(payload?.name),
-    platform: payload?.platform?.slice(0, 24) || "android",
-    appVersion: payload?.appVersion?.slice(0, 24) || "1.0.0",
+    platform: typeof payload?.platform === "string" ? payload.platform.slice(0, 24) || "android" : "android",
+    appVersion: typeof payload?.appVersion === "string" ? payload.appVersion.slice(0, 24) || "1.0.0" : "1.0.0",
     tokenHash: await sha256Hex(token),
     createdAt: now,
     lastSeenAt: now,

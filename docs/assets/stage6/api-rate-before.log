@@ -1,0 +1,32 @@
+✔ session DELETE cannot erase another owner’s ICE candidates (65.501521ms)
+✔ malformed JSON field types fail as 400 instead of crashing handlers (75.339017ms)
+✔ closed device decisions never claim approval/open/rejection success (111.634699ms)
+✖ parallel invalid pairing attempts cannot bypass the 20-attempt window (708.738263ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 3
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2044.033404
+
+✖ failing tests:
+
+test at tests/api-integration.test.mjs:30:1
+✖ parallel invalid pairing attempts cannot bypass the 20-attempt window (708.738263ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 5
+  
+      at TestContext.<anonymous> (file:///workspace/phone-remote/tests/api-integration.test.mjs:32:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 5,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

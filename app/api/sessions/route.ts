@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const user = await requireApiUser();
   if (!user) return apiError("로그인이 필요합니다.", 401);
   const payload = await readJson<SessionRequest>(request);
-  if (!payload?.deviceId) return apiError("연결할 기기를 선택해 주세요.");
+  if (typeof payload?.deviceId !== "string" || !payload.deviceId || payload.deviceId.length > 100) return apiError("연결할 기기를 선택해 주세요.");
 
   const db = await getDb();
   const [device] = await db

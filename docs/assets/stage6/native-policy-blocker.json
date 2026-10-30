@@ -1,0 +1,11 @@
+{
+  "status": "BLOCKED (native test exits with timeout)",
+  "observedPolicy": {
+    "file": "/etc/chromium/policies/managed/misc.json",
+    "WebRtcIPHandling": "disable_non_proxied_udp"
+  },
+  "policyChanged": false,
+  "VP8Passed": false,
+  "H264Passed": false,
+  "actualAndroidTested": false
+}

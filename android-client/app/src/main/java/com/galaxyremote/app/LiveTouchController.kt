@@ -41,6 +41,7 @@ class LiveTouchController(
         val sample = Sample(id, phase, nx.toFloat() * (size.first - 1), ny.toFloat() * (size.second - 1))
         // Bound latency: retain the newest move while a segment is executing, never drop down/up.
         if (phase == "move" && queue.lastOrNull()?.let { it.phase == "move" && it.touchId == id } == true) queue.removeLast()
+        if (queue.size >= 16) { release(); return false }
         queue.addLast(sample)
         handler.removeCallbacks(watchdog)
         if (phase == "up" || phase == "cancel") acceptingId = null

@@ -29,7 +29,16 @@ jobs:
 
       - name: Compile, unit test, and build unsigned packages
         working-directory: android-client
-        run: gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:bundleRelease --stacktrace
+        run: gradle :app:testDebugUnitTest :app:testPanelTestUnitTest :app:assemblePanelTest :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest :app:bundleRelease --stacktrace
+
+      - name: Upload JVM test results even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galaxy-remote-unit-test-reports
+          path: android-client/app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Collect Android signing tools
         shell: bash
@@ -46,11 +55,13 @@ jobs:
           name: galaxy-remote-apk-build
           path: |
             android-client/app/build/outputs/apk/debug/app-debug.apk
+            android-client/app/build/outputs/apk/panelTest/app-panelTest.apk
             android-client/app/build/outputs/apk/release/app-release-unsigned.apk
+            android-client/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             android-client/app/build/outputs/bundle/release/app-release.aab
             android-signing-tools/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
       - name: Free disposable runner space for Android 16 emulator
         shell: bash
@@ -75,7 +86,7 @@ jobs:
           emulator-boot-timeout: 300
           emulator-options: -memory 2048 -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: >-
-            bash -c 'adb logcat -c; test_status=0; gradle :app:connectedDebugAndroidTest --stacktrace || test_status=$?; adb logcat -d -b all -v threadtime > android16-logcat.txt 2>&1 || true; adb shell dumpsys activity exit-info com.galaxyremote.app > android16-exit-info.txt 2>&1 || true; adb shell dumpsys dropbox --print data_app_crash > android16-app-crashes.txt 2>&1 || true; exit "$test_status"'
+            bash -c 'adb logcat -c; test_status=0; gradle :app:connectedDebugAndroidTest --stacktrace || test_status=$?; adb logcat -d -b all -v threadtime > android16-logcat.txt 2>&1 || true; adb shell dumpsys activity activities > android16-activities.txt 2>&1 || true; adb shell dumpsys accessibility > android16-accessibility.txt 2>&1 || true; adb shell dumpsys input > android16-input.txt 2>&1 || true; adb shell dumpsys activity exit-info com.galaxyremote.app > android16-exit-info.txt 2>&1 || true; adb shell dumpsys dropbox --print data_app_crash > android16-app-crashes.txt 2>&1 || true; exit "$test_status"'
 
       - name: Upload device-test reports
         if: always()
@@ -87,6 +98,9 @@ jobs:
             android-client/app/build/outputs/androidTest-results/connected/
             android-client/android16-logcat.txt
             android-client/android16-exit-info.txt
+            android-client/android16-activities.txt
+            android-client/android16-accessibility.txt
+            android-client/android16-input.txt
             android-client/android16-app-crashes.txt
           if-no-files-found: ignore
           retention-days: 7

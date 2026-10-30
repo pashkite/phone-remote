@@ -1,0 +1,41 @@
+{
+  "base": "4081a0c6019b650d987c340abef5f80be5774f6d",
+  "sourceCommits": [
+    "99da602",
+    "61c939f"
+  ],
+  "webTests": {
+    "passed": 92,
+    "failed": 0,
+    "skipped": 0
+  },
+  "androidJvm": {
+    "debug": 16,
+    "panelTest": 16,
+    "failures": 0
+  },
+  "pythonPassed": 6,
+  "builds": [
+    "web",
+    "worker",
+    "panelTest arm64",
+    "debug x86_64",
+    "unsigned release arm64",
+    "instrumentation compiled"
+  ],
+  "browserSimulation": {
+    "interaction": "PASS",
+    "uxBranding": "PASS",
+    "integration": "PASS",
+    "network": "PASS",
+    "cycles": 100,
+    "wallClockSoakSeconds": 300
+  },
+  "nativeWebRtc": "BLOCKED: managed WebRtcIPHandling=disable_non_proxied_udp; timeout was not counted as pass",
+  "actualAndroid": "UNVERIFIED",
+  "sitesAuth": "UNVERIFIED",
+  "githubActions": "UNVERIFIED: API Forbidden",
+  "panelOffExecuted": false,
+  "productionDeployed": false,
+  "verdict": "CONDITIONAL GO"
+}

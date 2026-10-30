@@ -7,6 +7,7 @@ import kotlin.system.exitProcess
 class GalaxyRemoteApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(AppearancePreferences(this).nightMode)
         cacheDir.listFiles()?.filter { it.name.startsWith("remote-receive-") || it.name.startsWith("remote-send-") }?.forEach { it.delete() }
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->

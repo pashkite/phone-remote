@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import ts from 'typescript';
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gr-editor-'));
+for(const name of ['profiles','validation'])fs.writeFileSync(path.join(dir,name+'.mjs'),ts.transpileModule(fs.readFileSync(new URL(`../lib/interaction/${name}.ts`,import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
+const {mappingProblem,savedProfileProblem}=await import(pathToFileURL(path.join(dir,'validation.mjs')));
+const {defaultProfile,defaultStore}=await import(pathToFileURL(path.join(dir,'profiles.mjs')));
+test('editor rejects duplicates without silently dropping a mapping',()=>{const p=defaultProfile('game');p.bindings[1].key=p.bindings[0].key;assert.match(mappingProblem(p),/중복 키/);assert.equal(p.bindings.length,15);});
+test('editor rejects NaN, infinity, missing and out-of-range normalized coordinates',()=>{for(const n of [NaN,Infinity,undefined,-.1,1.1]){const p=defaultProfile('game');p.bindings[0].x=n;assert.match(mappingProblem(p),/좌표는/);}const p=defaultProfile('game');p.bindings[0].x=0;p.bindings[0].y=1;assert.equal(mappingProblem(p),null);});
+test('existing version 1 profiles remain valid; malformed imports warn before overwriting storage',()=>{assert.equal(savedProfileProblem(null),null);assert.equal(savedProfileProblem(JSON.stringify(defaultStore())),null);for(const raw of ['{','{}','{"version":2,"profiles":[]}',JSON.stringify({version:1,profiles:[{mode:'game'}]}),'x'.repeat(65537)])assert.ok(savedProfileProblem(raw));const p=defaultStore();p.profiles[0].bindings[0].x=2;assert.match(savedProfileProblem(JSON.stringify(p)),/원본 저장값은 보존/);});

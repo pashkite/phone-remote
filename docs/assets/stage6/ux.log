@@ -1,0 +1,12 @@
+PASS branding metadata and real favicon/PNG/manifest MIME responses
+PASS pairing error, retry, expiry, keyboard focus trap and Escape return
+PASS request / response / consent / negotiation and no premature connected state
+PASS unknown stats, read-only panel OFF safety, collapsible panels keep peer
+PASS marker drag + keyboard coordinates, duplicate key / invalid coordinate and edit input isolation
+PASS all requested responsive sizes, modes, no overflow, light/dark and reduced motion
+PASS disconnect confirmation cancels / confirms, reconnect UI and fullscreen failure
+PASS offline, unknown device, API/session expiry, no devices and recovery actions
+PASS stage 5: local Chromium UI/brand checks. Device behavior and production OAuth UNVERIFIED.
+PASS guest login and small-size icons render in real Chromium
+PASS version 1 settings survive personal/public switching; quota errors never claim saved
+PASS corrupt stored profile remains intact until explicit replacement

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "cancel during delayed session response cannot resurrect a peer",
+    "status": "PASS"
+  },
+  {
+    "name": "selecting another device closes the previous device control",
+    "status": "PASS"
+  },
+  {
+    "name": "authentication expiry terminates open control and prevents reconnect",
+    "status": "PASS"
+  },
+  {
+    "name": "100 connection cycles release peers, streams, timers and input; listener/heap samples",
+    "status": "PASS"
+  },
+  {
+    "name": "wall-clock reading soak stops after hidden/network disconnect",
+    "status": "PASS"
+  }
+]

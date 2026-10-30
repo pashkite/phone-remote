@@ -1,3 +1,4 @@
+import { parseSenderMetrics, type SenderMetrics } from "./streaming";
 import { Diagnostics } from "./diagnostics";
 import { FileTransfer, type FileOffer } from "./files";
 import { MAX_CLIPBOARD_BYTES, PROTOCOL_VERSION, type CommandStatus } from "./protocol";
@@ -5,6 +6,19 @@ import { PcmPlayer, ScreenRecording, downloadBlob, screenshot, timestamp } from 
 export type ToolsState = { features: string[]; result: string; clipboard: string; offer: FileOffer | null; fileStatus: string; recording: boolean; recordingAt: number; audio: boolean; audioStatus: string };
 export class RemoteClient {
   readonly diagnostics: Diagnostics;
+  senderMetrics: SenderMetrics | null = null;
+  inputSessionId: string | null = null;
+  inputError: string | null = null;
+  private pointerSequence = 0;
+  private closed = false;
+  private audioStarting = false;
+  private extensionChannels = new Set<RTCDataChannel>();
+  sendPointerFrame(points: unknown[]) {
+    if (!this.supports("multiTouchExperimental") || !this.inputSessionId || points.length > 5) return false;
+    const boundary=points.some(p=>p!==null&&typeof p==="object"&&(p as {phase?:string}).phase!=="move");
+    if (this.channel.bufferedAmount > (boundary?65536:2048)) return false;
+    return this.raw({ type: "pointerFrame", v: 1, sessionId: this.inputSessionId, pointerSeq: ++this.pointerSequence, points });
+  }
   readonly id = crypto.randomUUID();
   private pending = new Map<string, { timer: ReturnType<typeof setTimeout>; type: string }>();
   private sequence = 0;
@@ -22,14 +36,14 @@ export class RemoteClient {
   subscribe(listener: (state: ToolsState) => void) { this.listeners.add(listener); listener(this.state); return () => { this.listeners.delete(listener); }; }
   private update(value: Partial<ToolsState>) { if (Object.entries(value).every(([k,v]) => this.state[k as keyof ToolsState] === v)) return; this.state = { ...this.state, ...value }; this.listeners.forEach(l => l(this.state)); }
   opened() { this.diagnostics.record("channel", { state: "open" }); }
-  private raw(payload: Record<string, unknown>) { if (this.channel.readyState !== "open" || this.channel.bufferedAmount > 262144) return false; try { this.channel.send(JSON.stringify(payload)); return true; } catch { return false; } }
+  private raw(payload: Record<string, unknown>) { if (this.closed || this.channel.readyState !== "open" || this.channel.bufferedAmount > 262144) return false; try { this.channel.send(JSON.stringify(payload)); return true; } catch { return false; } }
   supports(feature: string) { return this.state.features.includes(feature); }
-  sendTouch(payload: Record<string, unknown>) { return this.supports("liveTouch") && this.channel.bufferedAmount <= 2048 && this.raw(payload); }
+  sendTouch(payload: Record<string, unknown>) { return this.supports("liveTouch") && this.channel.bufferedAmount <= (payload.phase === "up" || payload.phase === "cancel" ? 65536 : 2048) && this.raw(payload); }
   send(payload: Record<string, unknown>) {
     if (!this.state.features.includes("commandAck")) return this.raw(payload);
     if (this.pending.size >= 256) { this.update({ result: "명령 응답이 밀리고 있습니다. 잠시 기다려 주세요." }); return false; }
     const id = crypto.randomUUID(), type = String(payload.type);
-    const timer = setTimeout(() => { this.pending.delete(id); this.result(type, "timeout", "TIMEOUT"); }, 6000);
+    const timer = setTimeout(() => { this.pending.delete(id); if (["tap","swipe","longPress"].includes(type)) this.inputError = "INPUT_TIMEOUT"; this.result(type, "timeout", "TIMEOUT"); }, 6000);
     this.pending.set(id, { timer, type });
     if (!this.raw({ ...payload, v: PROTOCOL_VERSION, id, seq: ++this.sequence })) { clearTimeout(timer); this.pending.delete(id); return false; }
     return true;
@@ -42,30 +56,34 @@ export class RemoteClient {
     this.diagnostics.record("command", { type, status, code: code ?? null });
   }
   private receive(text: string) {
-    if (text.length > 100_000) return;
+    if (this.closed || text.length > 100_000) return;
     try {
       const m = JSON.parse(text);
+      if (m.type === "inputError") this.inputError = String(m.code).slice(0,80);
       if (m.type === "capabilities" && m.v === PROTOCOL_VERSION && Array.isArray(m.features)) {
+        if (typeof m.inputSessionId === "string" && /^[a-f0-9-]{36}$/.test(m.inputSessionId)) this.inputSessionId = m.inputSessionId;
         if (!this.helloSent) { this.helloSent = true; this.raw({ type: "hello", v: 1, features: ["commandAck", "clipboard", "files", "pcmAudio", "diagnostics", "liveTouch"] }); }
         // Old Android builds treat any arriving DataChannel as control. Only
         // open extension channels after the peer explicitly supports them.
         if (!this.fileTransfer && m.features.includes("files")) {
-          const files = this.peer.createDataChannel("files", { ordered: true });
+          const files = this.peer.createDataChannel("files", { ordered: true });this.extensionChannels.add(files);
           this.fileTransfer = new FileTransfer(files, status => { this.update({ fileStatus: status }); this.diagnostics.record("file", { state: status.startsWith("전송") ? "sending" : "event" }); }, offer => this.update({ offer }));
         }
         if (!this.state.features.includes("pcmAudio") && m.features.includes("pcmAudio")) {
-          const audio = this.peer.createDataChannel("audio-pcm", { ordered: false, maxRetransmits: 0 });
+          const audio = this.peer.createDataChannel("audio-pcm", { ordered: false, maxRetransmits: 0 });this.extensionChannels.add(audio);
           audio.binaryType = "arraybuffer"; audio.onmessage = (event: MessageEvent) => { if (event.data instanceof ArrayBuffer) this.player.receive(event.data); };
         }
         this.update({ features: m.features.filter((f: unknown) => typeof f === "string"), result: "처리 결과를 확인할 수 있습니다. 앱 화면의 버튼 동작까지 보장하지는 않습니다." });
       }
       if (m.type === "ack" && m.v === 1 && ["received","accepted","completed","failed"].includes(m.status)) {
         const pending = this.pending.get(m.id); if (!pending) return;
+        if (m.status === "failed" && ["tap","swipe","longPress"].includes(pending.type)) this.inputError = "INPUT_REJECTED";
         this.result(pending.type, m.status, typeof m.code === "string" && /^[A-Z_]{1,50}$/.test(m.code) ? m.code : undefined);
         if (["completed","failed"].includes(m.status)) { clearTimeout(pending.timer); this.pending.delete(m.id); }
       }
       if (m.type === "clipboard" && typeof m.text === "string" && new TextEncoder().encode(m.text).length <= MAX_CLIPBOARD_BYTES) this.update({ clipboard: m.text });
       if (m.type === "audioState") this.update({ audio: m.state === "started", audioStatus: m.state === "started" ? "재생 소리 전송 중 · 보호된 앱은 무음일 수 있어요." : m.code === "AUDIO_PERMISSION_REQUIRED" ? "휴대폰 앱 → 전송·대기·진단 → 재생 소리 캡처 권한을 허용해 주세요." : m.code ? `오디오 캡처를 시작할 수 없습니다 (${String(m.code).slice(0,50)})` : "꺼짐" });
+      if (m.type === "streamMetrics" && m.v === 1) this.senderMetrics = parseSenderMetrics(m.data, performance.now());
       if (m.type === "notice" && typeof m.message === "string") this.update({ result: m.message.slice(0, 300) });
       if (m.type === "diagnostic" && m.data && typeof m.data === "object") this.diagnostics.record("android", m.data);
     } catch { this.diagnostics.record("protocol", { code: "INVALID_MESSAGE" }); }
@@ -78,17 +96,30 @@ export class RemoteClient {
   async copyClipboard() { await navigator.clipboard.writeText(this.state.clipboard); }
   capture() { return screenshot(this.video()); }
   async startRecording() {
+    if(this.closed)throw new Error("연결이 닫혔습니다.");
     const stream = this.stream(); if (!stream) throw new Error("연결 후 녹화해 주세요.");
     const tracks = [...stream.getVideoTracks(), ...(this.state.audio ? this.player.destination?.stream.getAudioTracks() ?? [] : [])];
-    if (await this.recording.start(new MediaStream(tracks))) this.update({ recording: true, recordingAt: Date.now() });
+    if (await this.recording.start(new MediaStream(tracks)) && !this.closed) this.update({ recording: true, recordingAt: Date.now() });
   }
   stopRecording() { this.recording.stop(); }
   async toggleAudio() {
+    if(this.closed)throw new Error("연결이 닫혔습니다.");
+    if(this.audioStarting)return;
     if (this.state.recording) throw new Error("녹화를 중지한 뒤 소리 설정을 바꿔 주세요.");
     if (this.state.audio) { this.send({ type: "audio", enabled: false }); this.player.close(); this.update({ audio: false, audioStatus: "꺼짐" }); }
-    else { this.player.close(); await this.player.start(); if (!this.send({ type: "audio", enabled: true })) throw new Error("연결 종료"); this.update({ audioStatus: "휴대폰 오디오 캡처를 요청했습니다." }); }
+    else {
+      this.audioStarting=true;
+      try {
+        this.player.close();await this.player.start();
+        if(this.closed||!this.send({ type: "audio", enabled: true })) {this.player.close();throw new Error("연결 종료");}
+        this.update({ audioStatus: "휴대폰 오디오 캡처를 요청했습니다." });
+      } catch(error) {this.player.close();throw error;}
+      finally {this.audioStarting=false;}
+    }
   }
   audioVolume(value: number) { this.player.volume(value); }
-  exportDiagnostics() { downloadBlob(new Blob([this.diagnostics.export()], { type: "application/json" }), `GalaxyRemote-diagnostics-${timestamp()}.json`); }
-  close() { this.fileTransfer?.close(); this.recording.stop(); this.player.close(); this.pending.forEach(p => clearTimeout(p.timer)); this.pending.clear(); this.update({ features: [], clipboard: "", offer: null, audio: false, audioStatus: "꺼짐" }); this.diagnostics.record("channel", { state: "closed" }); }
+  exportDiagnostics() { downloadBlob(new Blob([this.diagnostics.export()], { type: "application/json" }), `Linro-diagnostics-${timestamp()}.json`); }
+  close() { if(this.closed)return;this.closed=true;this.channel.onmessage=null;
+    for(const channel of this.extensionChannels){channel.onmessage=null;channel.onclose=null;channel.close();}this.extensionChannels.clear();
+    this.inputSessionId = null; this.inputError = null; this.senderMetrics = null; this.fileTransfer?.close(); this.recording.stop(); this.player.close(); this.pending.forEach(p => clearTimeout(p.timer)); this.pending.clear(); this.update({ features: [], clipboard: "", offer: null, audio: false, audioStatus: "꺼짐" }); this.diagnostics.record("channel", { state: "closed" });this.listeners.clear(); }
 }
