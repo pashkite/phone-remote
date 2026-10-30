@@ -4,40 +4,51 @@
   "branch": "main",
   "project_id": "appgprj_6a589c9a8e588191830cce459783c685",
   "production_url": "https://remote.ashkite.kro.kr",
-  "last_successful_github_sha": null,
-  "last_successful_sites_sha": "95f245704f0346037707924fe6bf69adfe216fb3",
-  "last_successful_version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_1e0f943ff7408191afd4f821d2857c87",
-  "last_successful_deployment_id": "appgdep_6acf5ed69de48191931c07f560bc41ec",
-  "last_checked_github_sha": null,
-  "lock": {
-    "owner": "linro-run-cb7454f4fd4b8aba5d27e8ff",
-    "acquired_at": "2026-10-30T21:57:44.849957+00:00"
+  "last_successful_github_sha": "6971be1511de9131580bcfe505821de10d0509aa",
+  "last_successful_sites_sha": "30f06aadcf07635f87b322d950fe8365d0a7fc67",
+  "last_successful_version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_3a51f06b9790819190b1b5ac261c76aa",
+  "last_successful_deployment_id": "appgdep_6ae512f505508191a4a546bef3b548b1",
+  "last_checked_github_sha": "6971be1511de9131580bcfe505821de10d0509aa",
+  "lock": null,
+  "pending": null,
+  "last_result": "Published LINRO version 48; native success and read-only production health passed; saved GitHub/Sites provenance; no duplicate publish",
+  "previous_successful": {
+    "sites_sha": "95f245704f0346037707924fe6bf69adfe216fb3",
+    "version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_1e0f943ff7408191afd4f821d2857c87",
+    "deployment_id": "appgdep_6acf5ed69de48191931c07f560bc41ec"
   },
-  "pending": {
-    "github_sha": "6971be1511de9131580bcfe505821de10d0509aa",
-    "sites_sha": "30f06aadcf07635f87b322d950fe8365d0a7fc67",
-    "version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_3a51f06b9790819190b1b5ac261c76aa",
-    "previous_version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_1e0f943ff7408191afd4f821d2857c87",
-    "previous_deployment_id": "appgdep_6acf5ed69de48191931c07f560bc41ec",
-    "phase": "deployed_health_check",
-    "validation": {
-      "build": "passed",
-      "typescript": "passed",
-      "tests_passed": 94,
-      "tests_failed": 0,
-      "db_and_migrations_unchanged": true,
-      "apk_assets_unchanged": 17,
-      "secret_scan": "passed",
-      "environment_revision": 2,
-      "web_source_sha256": "810334b87e399cb719c73bfe10971a8e41f180d3a6c9ed7c695645238e2c8218",
-      "unverified": [
-        "signed-in production browser flow",
-        "physical Android/WebRTC",
-        "production POST/device authorization smoke test",
-        "production forged identity-header test"
-      ]
+  "last_successful_at": "2026-10-30T22:00:33.585Z",
+  "web_source_sha256": "810334b87e399cb719c73bfe10971a8e41f180d3a6c9ed7c695645238e2c8218",
+  "environment_revision": 2,
+  "last_validation": {
+    "build": "passed",
+    "typescript": "passed",
+    "tests_passed": 94,
+    "tests_failed": 0,
+    "db_and_migrations_unchanged": true,
+    "apk_assets_unchanged": 17,
+    "secret_scan": "passed",
+    "environment_revision": 2,
+    "web_source_sha256": "810334b87e399cb719c73bfe10971a8e41f180d3a6c9ed7c695645238e2c8218",
+    "unverified": [
+      "signed-in production browser flow",
+      "physical Android/WebRTC",
+      "production POST/device authorization smoke test",
+      "production forged identity-header test"
+    ]
+  },
+  "last_health": {
+    "result": "passed",
+    "homepage_status": 200,
+    "linro_login_ui": true,
+    "protected_get_status": {
+      "/api/devices": 401,
+      "/api/ice": 401,
+      "/api/build-info": 401
     },
-    "deployment_id": "appgdep_6ae512f505508191a4a546bef3b548b1"
-  },
-  "last_result": "version 48 saved, validated and ready for unattended initial deployment"
+    "javascript_status": 200,
+    "css_status": 200,
+    "assets_byte_identical_to_saved_build": true,
+    "db_tables_unchanged": true
+  }
 }
