@@ -17,7 +17,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,10 +26,20 @@ jobs:
           cache: npm
       - run: bash scripts/sites-env.sh -- bash scripts/install-ci.sh
       - run: npm run lint
-      - run: bash scripts/test-web-streaming.sh
+      - name: Full web and API regression
+        run: |
+          set -o pipefail
+          mkdir -p outputs/integration-qa
+          bash scripts/test-web-streaming.sh 2>&1 | tee outputs/integration-qa/web-tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: galaxy-remote-web-qa-reports
+          path: outputs/integration-qa/
+          retention-days: 7
   browser-interactions:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,3 +65,15 @@ jobs:
         run: |
           node scripts/test-interaction-browser.mjs
           node scripts/test-ux-branding-browser.mjs
+          QA_SOAK_SECONDS=300 node scripts/test-integration-browser.mjs
+          node scripts/test-network-browser.mjs
+          node scripts/test-webrtc-loopback-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: galaxy-remote-browser-qa-reports
+          path: |
+            outputs/integration-qa/
+            outputs/ux-branding/after/
+            /tmp/galaxy-browser-dev.log
+          retention-days: 7

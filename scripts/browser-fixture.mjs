@@ -28,6 +28,7 @@ await page.addInitScript(({sid,holdPeer})=>{
   async createOffer(){return {type:'offer',sdp:'test-only'};}
   async setLocalDescription(value){this.localDescription={...value,toJSON:()=>value};}
   async setRemoteDescription(){this.currentRemoteDescription={type:'answer'};setTimeout(()=>{
+   if(this.connectionState==='closed')return;
    if(!holdPeer){this.connectionState='connected';this.onconnectionstatechange?.();}this.channel.readyState='open';this.channel.onopen?.();
    this.channel.onmessage?.({data:JSON.stringify({type:'capabilities',v:1,inputSessionId:sid,features:['commandAck','liveTouch','lowLatencyInput','multiTouchExperimental','quality720']})});
    const canvas=document.createElement('canvas');window.__canvas=canvas;canvas.width=360;canvas.height=800;const ctx=canvas.getContext('2d');ctx.fillStyle='#142233';ctx.fillRect(0,0,360,800);ctx.fillStyle='white';ctx.font='16px sans-serif';ctx.fillText('LOCAL UI FIXTURE',25,50);ctx.font='12px sans-serif';ctx.fillStyle='#67d8ca';ctx.fillText('SIMULATED · NO ANDROID DEVICE',25,80);ctx.strokeStyle='#304158';for(let y=140;y<760;y+=100){ctx.strokeRect(25,y,310,70);ctx.fillStyle='#a5b5c8';ctx.fillText('Browser test content',40,y+40);};this.stream=canvas.captureStream(10);this.ontrack?.({streams:[this.stream],track:this.stream.getVideoTracks()[0]});
