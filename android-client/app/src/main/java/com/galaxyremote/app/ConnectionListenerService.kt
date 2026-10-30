@@ -48,6 +48,7 @@ class ConnectionListenerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        isRunning = false
         executor.shutdownNow()
         if (stoppedByUser) preferences.listenerEnabled = false
         sendStatus(if (stoppedByUser) "연결 요청 알림을 껐습니다." else "연결 요청 알림이 중단되었습니다.")
@@ -73,6 +74,7 @@ class ConnectionListenerService : Service() {
         } else {
             startForeground(READY_NOTIFICATION_ID, notification)
         }
+        isRunning = true
         sendStatus("PC에서 연결 시작을 누르면 승인 알림이 도착합니다.")
         executor.execute(::pollLoop)
     }
@@ -291,6 +293,7 @@ class ConnectionListenerService : Service() {
     }
 
     private fun stopListener() {
+        isRunning = false
         stoppedByUser = true
         preferences.listenerEnabled = false
         getSystemService(NotificationManager::class.java).cancel(REQUEST_NOTIFICATION_ID)
@@ -299,6 +302,8 @@ class ConnectionListenerService : Service() {
     }
 
     companion object {
+        @Volatile var isRunning = false
+            private set
         @Volatile var pollRequests = 0
             private set
 

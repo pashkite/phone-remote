@@ -1,13 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <color name="page">#F5F9FF</color>
+    <color name="page">#EDF2F5</color>
     <color name="surface">#FFFFFF</color>
-    <color name="primary">#3478F6</color>
-    <color name="primary_dark">#2869E8</color>
-    <color name="ink">#172033</color>
-    <color name="muted">#657084</color>
-    <color name="line">#DDE7F3</color>
-    <color name="blue_soft">#EAF2FF</color>
-    <color name="online">#29B36A</color>
-    <color name="danger">#D84A5A</color>
+    <color name="surface_soft">#F3F6F8</color>
+    <color name="primary">#096876</color>
+    <color name="primary_dark">#085461</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="ink">#142736</color>
+    <color name="muted">#4F6473</color>
+    <color name="line">#C6D4DD</color>
+    <color name="blue_soft">#E0F1F3</color>
+    <color name="online">#08785C</color>
+    <color name="danger">#AE3635</color>
+    <bool name="light_system_bars">true</bool>
 </resources>

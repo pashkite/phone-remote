@@ -23,6 +23,11 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
@@ -30,6 +35,8 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity() {
     private lateinit var preferences: RemotePreferences
     private var editingRegistration = false
+    private var currentTab = "home"
+    private var latestServiceMessage: String? = null
     private lateinit var statusBadge: TextView
     private lateinit var pairingDescription: TextView
     private lateinit var pairingCode: EditText
@@ -46,8 +53,13 @@ class MainActivity : AppCompatActivity() {
     private var pendingSessionId: String? = null
     private var preparingTrustedAccess = false
     private var runtimeErrorDialogShowing = false
-    private var incomingManager: RemoteFileTransfer? = null
-    private var incomingId: String? = null
+    private val pendingOperations by lazy { ViewModelProvider(this)[MainUiOperations::class.java] }
+    private var incomingManager: RemoteFileTransfer?
+        get() = pendingOperations.incomingManager
+        set(value) { pendingOperations.incomingManager = value }
+    private var incomingId: String?
+        get() = pendingOperations.incomingId
+        set(value) { pendingOperations.incomingId = value }
     private val sendFilePicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) RemoteFileTransfer.current?.queueFiles(uris)
     }
@@ -124,14 +136,14 @@ class MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ConnectionListenerService.ACTION_STATUS) {
                 val message = intent.getStringExtra(ConnectionListenerService.EXTRA_STATUS_MESSAGE)
-                if (!message.isNullOrBlank()) standbyStatus.text = message
+                if (!message.isNullOrBlank()) latestServiceMessage = message
                 renderState()
                 return
             }
             val message = intent?.getStringExtra(RemoteControlService.EXTRA_STATUS_MESSAGE)
             val active = intent?.getBooleanExtra(RemoteControlService.EXTRA_STATUS_ACTIVE, false) ?: false
             preferences.standbyActive = active
-            if (!message.isNullOrBlank()) setStatus(message, active)
+            if (!message.isNullOrBlank()) { latestServiceMessage = message; setStatus(message, active) }
             renderState()
             if (!active) showPendingRuntimeError()
         }
@@ -139,44 +151,56 @@ class MainActivity : AppCompatActivity() {
 
     private fun openRemoteTools() {
         val labels = arrayOf("클립보드 텍스트를 PC로 보내기", "파일을 PC로 보내기", "PC 파일 수신 승인·저장 위치 선택", "재생 소리 캡처 권한 설정", "대기 모드 선택", "진단 보기", "진단 JSON 내보내기", "파일 전송 취소", "테스트 연결 정보")
-        AlertDialog.Builder(this).setTitle("전송·대기·진단").setItems(labels) { _, which ->
-            when (which) {
-                0 -> {
-                    try {
-                        val clipboard = getSystemService(android.content.ClipboardManager::class.java)
-                        val text = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()
-                        val sent = text != null && RemoteControlService.activeInstance?.sendLocalClipboard(text) == true
-                        Toast.makeText(this, if (sent) "PC로 텍스트를 보냈습니다." else "클립보드가 없거나 PC 연결이 없습니다. 최대 64KiB입니다.", Toast.LENGTH_LONG).show()
-                    } catch (_: Exception) { Toast.makeText(this, "클립보드 접근이 제한됐습니다.", Toast.LENGTH_LONG).show() }
-                }
-                1 -> if (RemoteFileTransfer.current != null) sendFilePicker.launch(arrayOf("*/*")) else Toast.makeText(this, "PC와 먼저 연결해 주세요.", Toast.LENGTH_LONG).show()
-                2 -> {
-                    val manager = RemoteFileTransfer.current
-                    val offer = manager?.pendingOffer
-                    if (offer == null) Toast.makeText(this, "수신 대기 파일이 없습니다.", Toast.LENGTH_LONG).show()
-                    else AlertDialog.Builder(this).setTitle("파일 수신 승인").setMessage("${offer.name} · ${offer.size} bytes\n수신할 파일과 저장 위치를 확인하세요.")
-                        .setPositiveButton("저장 위치 선택") { _, _ -> incomingManager = manager; incomingId = offer.id; receiveFilePicker.launch(offer.name) }
-                        .setNegativeButton("거절") { _, _ -> manager?.cancel() }.show()
-                }
-                3 -> audioPermission.launch(Manifest.permission.RECORD_AUDIO)
-                4 -> AlertDialog.Builder(this).setTitle("대기 모드").setItems(arrayOf("빠른 연결 (약 2초)", "균형 (약 4초)", "절약 (약 12초)")) { _, index ->
-                    preferences.standbyMode = arrayOf("fast", "balanced", "saving")[index]
-                    Toast.makeText(this, "대기 모드가 변경됐습니다. 자동 연결 중에는 화면 공유 승인 세션을 유지합니다.", Toast.LENGTH_LONG).show()
-                }.show()
-                5 -> AlertDialog.Builder(this).setTitle("로컬 진단").setMessage(RemoteDiagnostics.export(this)).setPositiveButton("닫기", null).show()
-                6 -> diagnosticsPicker.launch("Linro-diagnostics-${System.currentTimeMillis()}.json")
-                7 -> RemoteFileTransfer.current?.cancel()
-                8 -> AlertDialog.Builder(this).setTitle("린로 · 테스트 연결 정보")
-                    .setMessage("시험 버전: ${BuildConfig.DEVICE_TEST_BUILD_ID}\n패키지: ${BuildConfig.APPLICATION_ID}\n앱 버전 코드: ${BuildConfig.VERSION_CODE}\n신규 등록 주소: ${BuildConfig.SIGNALING_BASE_URL}\n기존 등록 주소: ${preferences.credentials?.baseUrl ?: "미등록"}\n\n웹 설정의 테스트 연결 정보와 주소·시험 버전을 비교하세요. 기존 등록 정보는 업데이트로 바뀌지 않습니다. 실기기·패널 OFF·복구는 미검증입니다.")
-                    .setPositiveButton("닫기", null).show()
-            }
-        }.show()
+        AlertDialog.Builder(this).setTitle("전송·대기·진단").setItems(labels) { _, which -> performTool(which) }.show()
     }
+
+    private fun performTool(which: Int) {
+        when (which) {
+            0 -> {
+                try {
+                    val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                    val text = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()
+                    val sent = text != null && RemoteControlService.activeInstance?.sendLocalClipboard(text) == true
+                    Toast.makeText(this, if (sent) "PC로 텍스트를 보냈습니다." else "클립보드가 없거나 PC 연결이 없습니다. 최대 64KiB입니다.", Toast.LENGTH_LONG).show()
+                } catch (_: Exception) { Toast.makeText(this, "클립보드 접근이 제한됐습니다.", Toast.LENGTH_LONG).show() }
+            }
+            1 -> if (RemoteFileTransfer.current != null) sendFilePicker.launch(arrayOf("*/*")) else Toast.makeText(this, "PC와 먼저 연결해 주세요.", Toast.LENGTH_LONG).show()
+            2 -> {
+                val manager = RemoteFileTransfer.current
+                val offer = manager?.pendingOffer
+                if (offer == null) Toast.makeText(this, "수신 대기 파일이 없습니다.", Toast.LENGTH_LONG).show()
+                else AlertDialog.Builder(this).setTitle("파일 수신 승인").setMessage("${offer.name} · ${offer.size} bytes\n수신할 파일과 저장 위치를 확인하세요.")
+                    .setPositiveButton("저장 위치 선택") { _, _ -> incomingManager = manager; incomingId = offer.id; receiveFilePicker.launch(offer.name) }
+                    .setNegativeButton("거절") { _, _ -> manager?.cancel() }.show()
+            }
+            3 -> audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+            4 -> AlertDialog.Builder(this).setTitle("대기 모드").setItems(arrayOf("빠른 연결 (약 2초)", "균형 (약 4초)", "절약 (약 12초)")) { _, index ->
+                preferences.standbyMode = arrayOf("fast", "balanced", "saving")[index]
+                Toast.makeText(this, "대기 모드가 변경됐습니다. 자동 연결 중에는 화면 공유 승인 세션을 유지합니다.", Toast.LENGTH_LONG).show()
+            }.show()
+            5 -> AlertDialog.Builder(this).setTitle("로컬 진단").setMessage(RemoteDiagnostics.export(this)).setPositiveButton("닫기", null).show()
+            6 -> diagnosticsPicker.launch("Linro-diagnostics-${System.currentTimeMillis()}.json")
+            7 -> RemoteFileTransfer.current?.cancel()
+            8 -> AlertDialog.Builder(this).setTitle("린로 · 테스트 연결 정보")
+                .setMessage("시험 버전: ${BuildConfig.DEVICE_TEST_BUILD_ID}\n패키지: ${BuildConfig.APPLICATION_ID}\n앱 버전 코드: ${BuildConfig.VERSION_CODE}\n신규 등록 주소: ${BuildConfig.SIGNALING_BASE_URL}\n기존 등록 주소: ${preferences.credentials?.baseUrl ?: "미등록"}\n\n웹 설정의 테스트 연결 정보와 주소·시험 버전을 비교하세요. 기존 등록 정보는 업데이트로 바뀌지 않습니다. 실기기·패널 OFF·복구는 미검증입니다.")
+                .setPositiveButton("닫기", null).show()
+        }
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
         preferences = RemotePreferences(this)
+        currentTab = savedInstanceState?.getString(STATE_TAB) ?: "home"
+        editingRegistration = savedInstanceState?.getBoolean(STATE_EDITING_REGISTRATION) == true
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.appRoot)) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, keyboard.bottom))
+            insets
+        }
         pendingSessionId = savedInstanceState?.getString(STATE_PENDING_SESSION_ID)
         preparingTrustedAccess = savedInstanceState?.getBoolean(STATE_PREPARING_TRUSTED_ACCESS) == true
         inspectPreviousProcessExit()
@@ -197,19 +221,17 @@ class MainActivity : AppCompatActivity() {
         standbyButton = findViewById(R.id.standbyButton)
 
         findViewById<Button>(R.id.remoteToolsButton).setOnClickListener { openRemoteTools() }
-        if (BuildConfig.DISPLAY_CONTROL_EXPERIMENTAL) {
-            val parent = findViewById<Button>(R.id.remoteToolsButton).parent as android.view.ViewGroup
-            parent.addView(Button(this).apply {
-                text = "물리 패널 OFF 실험 (미검증)"
-                setOnClickListener { startActivity(Intent(this@MainActivity, com.galaxyremote.app.display.PanelExperimentActivity::class.java)) }
-            })
+        findViewById<Button>(R.id.experimentButton).apply {
+            visibility = if (BuildConfig.DISPLAY_CONTROL_EXPERIMENTAL) View.VISIBLE else View.GONE
+            setOnClickListener { startActivity(Intent(this@MainActivity, com.galaxyremote.app.display.PanelExperimentActivity::class.java)) }
         }
+        bindNavigation()
         pairButton.setOnClickListener { pairDevice() }
         accessibilityButton.setOnClickListener { openAccessibilitySettings() }
         keyboardButton.setOnClickListener { configureRemoteKeyboard() }
         standbyButton.setOnClickListener {
             when {
-                preferences.standbyActive -> stopScreenShare()
+                RemoteControlService.activeInstance != null || RemoteControlService.isProjectionReady() -> stopScreenShare()
                 preferences.listenerEnabled -> prepareTrustedAutoConnect()
                 else -> enableRequestListener()
             }
@@ -244,6 +266,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_TAB, currentTab)
+        outState.putBoolean(STATE_EDITING_REGISTRATION, editingRegistration)
         outState.putString(STATE_PENDING_SESSION_ID, pendingSessionId)
         outState.putBoolean(STATE_PREPARING_TRUSTED_ACCESS, preparingTrustedAccess)
         super.onSaveInstanceState(outState)
@@ -290,6 +314,52 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    private fun bindNavigation() {
+        mapOf(R.id.navHome to "home", R.id.navTools to "tools", R.id.navDevices to "devices", R.id.navSettings to "settings").forEach { (id, tab) ->
+            findViewById<Button>(id).setOnClickListener { selectTab(tab) }
+        }
+        findViewById<View>(R.id.headerSettingsButton).setOnClickListener { selectTab("settings") }
+        findViewById<Button>(R.id.homePairButton).setOnClickListener { selectTab("devices") }
+        findViewById<Button>(R.id.homeAccessibilityButton).setOnClickListener { openAccessibilitySettings() }
+        findViewById<Button>(R.id.homeWaitingButton).setOnClickListener { selectTab("settings") }
+        mapOf(R.id.sendClipboardButton to 0, R.id.sendFileButton to 1, R.id.receiveFileButton to 2,
+            R.id.audioPermissionButton to 3, R.id.settingsAudioButton to 3, R.id.standbyModeButton to 4,
+            R.id.diagnosticsButton to 5, R.id.exportDiagnosticsButton to 6, R.id.cancelTransferButton to 7,
+            R.id.connectionInfoButton to 8, R.id.settingsConnectionInfoButton to 8).forEach { (id, action) ->
+            findViewById<Button>(id).setOnClickListener { performTool(action) }
+        }
+        findViewById<Button>(R.id.appearanceButton).setOnClickListener {
+            val appearance = AppearancePreferences(this)
+            AlertDialog.Builder(this).setTitle("외관").setSingleChoiceItems(arrayOf("시스템 설정", "다크 모드", "라이트 모드"), AppearancePreferences.MODES.indexOf(appearance.mode)) { dialog, index ->
+                appearance.mode = AppearancePreferences.MODES[index]
+                dialog.dismiss()
+                // AppCompat recreates the Activity; foreground services and WebRTC keep running.
+                AppCompatDelegate.setDefaultNightMode(appearance.nightMode)
+                renderState()
+            }.setNegativeButton("취소", null).show()
+        }
+        findViewById<Button>(R.id.notificationSettingsButton).setOnClickListener {
+            startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+        }
+        findViewById<Button>(R.id.listenerSettingsButton).setOnClickListener {
+            if (preferences.listenerEnabled && ConnectionListenerService.isRunning) {
+                AlertDialog.Builder(this).setTitle("연결 요청 알림 끄기").setMessage("새 연결 요청 알림을 끕니다. 이미 승인한 화면 공유를 중지하려면 홈의 화면 공유 중지를 사용하세요.")
+                    .setPositiveButton("알림 끄기") { _, _ -> stopRequestListener() }.setNegativeButton("취소", null).show()
+            } else enableRequestListener()
+        }
+        selectTab(currentTab)
+    }
+
+    private fun selectTab(tab: String) {
+        val pages = mapOf("home" to R.id.homePage, "tools" to R.id.toolsPage, "devices" to R.id.devicesPage, "settings" to R.id.settingsPage)
+        currentTab = tab.takeIf { it in pages } ?: "home"
+        pages.forEach { (name, id) -> findViewById<View>(id).visibility = if (name == currentTab) View.VISIBLE else View.GONE }
+        mapOf("home" to R.id.navHome, "tools" to R.id.navTools, "devices" to R.id.navDevices, "settings" to R.id.navSettings).forEach { (name, id) ->
+            findViewById<Button>(id).apply { isSelected = name == currentTab; ViewCompat.setStateDescription(this, if (isSelected) "선택됨" else "선택 안 됨") }
+        }
+        renderState()
+    }
+
     private fun pairDevice() {
         val code = pairingCode.text.toString().filter(Char::isDigit)
         if (code.length != 6) {
@@ -334,6 +404,7 @@ class MainActivity : AppCompatActivity() {
     private fun enableRequestListener() {
         if (preferences.credentials == null) {
             Toast.makeText(this, "먼저 PC 사이트의 6자리 코드로 기기를 등록해 주세요.", Toast.LENGTH_LONG).show()
+            selectTab("devices")
             pairingCode.requestFocus()
             return
         }
@@ -347,6 +418,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startRequestListener() {
         if (preferences.credentials == null || !hasNotificationPermission()) return
+        if (ConnectionListenerService.isRunning) { renderState(); return }
         preferences.listenerEnabled = true
         ContextCompat.startForegroundService(
             this,
@@ -666,8 +738,8 @@ class MainActivity : AppCompatActivity() {
     private fun renderState() {
         val credentials = preferences.credentials
         val accessibilityEnabled = RemoteAccessibilityService.isEnabled(this)
-        val active = preferences.standbyActive
-        val listening = preferences.listenerEnabled
+        val active = RemoteControlService.activeInstance != null || RemoteControlService.isProjectionReady()
+        val listening = preferences.listenerEnabled && ConnectionListenerService.isRunning
         val keyboardEnabled = RemoteKeyboardService.isEnabled(this)
         val keyboardSelected = RemoteKeyboardService.isSelected(this)
 
@@ -737,10 +809,35 @@ class MainActivity : AppCompatActivity() {
             }
             }
         }
+
+        val state = ConnectionReadiness(credentials != null, accessibilityEnabled, hasNotificationPermission(), listening, RemoteControlService.isProjectionReady(), RemoteControlService.isRemoteConnected())
+        findViewById<TextView>(R.id.statusHeadline).text = state.title
+        statusBadge.text = when {
+            state.connected -> "PC와 연결됨"
+            state.projection -> "화면 공유 중"
+            state.listening -> "알림 대기 중"
+            else -> "설정 확인"
+        }
+        val observed = "화면 공유: ${if (state.projection) "현재 세션 승인됨" else "승인된 세션 없음"} · 알림 권한: ${if (state.notifications) "허용" else "미허용"}"
+        findViewById<TextView>(R.id.homeDeviceName).text = "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}"
+        findViewById<TextView>(R.id.homeDeviceStatus).text = "${if (credentials == null) "미등록" else "등록 정보 저장됨"}\n$observed"
+        findViewById<TextView>(R.id.registeredDeviceName).text = "${Build.MANUFACTURER} ${Build.MODEL}"
+        findViewById<TextView>(R.id.deviceRegistrationStatus).text = if (credentials == null) "미등록 · PC 웹에서 코드를 만들어 주세요." else "${credentials.owner.ifBlank { "소유자 계정" }}에 등록 정보 저장됨 · 서버 유효성은 연결 시 확인"
+        findViewById<TextView>(R.id.registeredOrigin).text = "연결 주소: ${credentials?.baseUrl ?: BuildConfig.SIGNALING_BASE_URL}\n${state.title}"
+        findViewById<TextView>(R.id.toolsConnectionStatus).text = if (state.connected) "PC 연결 중 · 전송 도구 사용 가능" else "PC 연결 없음 · 연결 후 파일/클립보드 전송 가능"
+        listOf(R.id.sendFileButton, R.id.sendClipboardButton, R.id.cancelTransferButton).forEach { findViewById<Button>(it).isEnabled = state.connected }
+        findViewById<TextView>(R.id.listenerSettingsStatus).text = "${if (listening) "요청 대기 서비스 실행 중" else "요청 대기 서비스 중지"} · 알림 ${if (hasNotificationPermission()) "허용" else "미허용"}"
+        findViewById<TextView>(R.id.appearanceStatus).text = when (AppearancePreferences(this).mode) { "dark" -> "다크 모드"; "light" -> "라이트 모드"; else -> "시스템 설정 사용" }
+        findViewById<TextView>(R.id.appVersionStatus).text = "린로 · Linro · Link Road\n${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+        if (active && !state.projection) standbyStatus.text = "화면 공유를 시작하고 있습니다. 아직 연결 준비가 완료되지 않았습니다."
+        if (state.projection) standbyStatus.text = "${if (state.connected) "PC와 연결 중입니다." else "승인된 화면 공유 세션을 유지하며 PC 요청을 기다립니다."} 화면 공유를 중지하면 자동 연결도 중지됩니다."
+        latestServiceMessage?.let { standbyStatus.append("\n$it") }
     }
 
     companion object {
         const val ACTION_APPROVE_SESSION = "com.galaxyremote.app.action.APPROVE_SESSION"
+        private const val STATE_TAB = "linro_selected_tab"
+        private const val STATE_EDITING_REGISTRATION = "linro_editing_registration"
         private const val STATE_PENDING_SESSION_ID = "pending_session_id"
         private const val STATE_PREPARING_TRUSTED_ACCESS = "preparing_trusted_access"
         private const val MAX_NATIVE_TRACE_BYTES = 256 * 1_024

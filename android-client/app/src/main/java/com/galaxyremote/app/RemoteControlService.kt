@@ -32,7 +32,7 @@ class RemoteControlService : Service() {
     @Volatile private var currentSessionId: String? = null
     private var candidatePollFuture: ScheduledFuture<*>? = null
     private var candidatePollCount = 0
-    private var connected = false
+    @Volatile private var connected = false
     private var leaseFuture: ScheduledFuture<*>? = null
     private var lastLeaseSuccess = 0L
     @Volatile private var shuttingDown = false
@@ -524,5 +524,6 @@ class RemoteControlService : Service() {
         private var projectionReady = false
 
         fun isProjectionReady(): Boolean = projectionReady
+        fun isRemoteConnected(): Boolean = activeInstance?.connected == true
     }
 }
