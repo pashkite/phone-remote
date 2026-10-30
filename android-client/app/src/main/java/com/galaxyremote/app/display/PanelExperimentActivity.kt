@@ -8,63 +8,133 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Display
+import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.galaxyremote.app.BuildConfig
-import rikka.shizuku.Shizuku
+import com.galaxyremote.app.R
 
 class PanelExperimentActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
+    private var refresh: Runnable? = null
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (!BuildConfig.DISPLAY_CONTROL_EXPERIMENTAL) { finish(); return }
         DisplayControl.initialize(applicationContext)
-        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
-        setContentView(ScrollView(this).apply { addView(column) })
-        fun text(value: String) = TextView(this).also { it.text = value; column.addView(it) }
-        text("물리 패널 OFF 실험 · 미검증\n별도 테스트 앱입니다. 잠금 해제 상태에서 사용하세요. 복구를 실기기로 확인하지 않았다면 OFF 금지. 타이머는 기기에서 검증되지 않았습니다.")
-        val output = text(DisplayControl.status)
-        fun work(action: () -> String) = DisplayControl.work(action) { result -> runOnUiThread { output.text = result } }
-        fun button(label: String, action: () -> Unit) {
-            column.addView(Button(this).apply { this.text = label; setOnClickListener { action() } })
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(20), dp(20), dp(24))
         }
-        button("1. Shizuku 권한 요청") {
-            try { check(Shizuku.pingBinder()) { "Shizuku를 먼저 시작하세요" }; Shizuku.requestPermission(202) }
-            catch (e: Exception) { output.text = e.message }
+        val scroll = ScrollView(this).apply {
+            setBackgroundColor(getColor(R.color.page)); clipToPadding = false; addView(column)
         }
-        button("2. 승인 후 shell 서비스 연결") {
-            try { DisplayControl.bind(); output.text = "연결 요청됨. 상태 조회로 확인하세요." }
-            catch (e: Exception) { output.text = e.message }
+        setContentView(scroll)
+        ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
+            insets
         }
+        ViewCompat.requestApplyInsets(scroll)
+        WindowCompat.getInsetsController(window, scroll).isAppearanceLightStatusBars = resources.getBoolean(R.bool.light_system_bars)
+        fun text(value: String, heading: Boolean = false) = TextView(this).also {
+            it.text = value; it.textSize = if (heading) 22f else 14f
+            it.setTextColor(getColor(if (heading) R.color.ink else R.color.muted))
+            it.setPadding(0, dp(8), 0, dp(8))
+            if (heading) ViewCompat.setAccessibilityHeading(it, true)
+            column.addView(it)
+        }
+        text("물리 패널 OFF 실험 · 미검증", true)
+        text("테스트 앱의 실험 기능입니다. 실제 패널 매핑과 외부 복구를 별도 검증하기 전에는 OFF 금지. 화면 잠금과 패널 전원 OFF는 다릅니다.")
+        val displayOutput = text("화면 ID·상태: 아직 조회하지 않았습니다.")
+        val commandsOutput = text(DisplayControl.commandSummary)
+        val output = text(DisplayControl.status).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        val offButtons = mutableListOf<Button>()
+        val confirmed = CheckBox(this).apply {
+            text = "이 기기·현재 펌웨어에서 ADB 복구 경로와 display 0의 실제 패널 매핑을 별도 검증했습니다. ON 명령 수락만으로 확인하지 않았습니다."
+            setTextColor(getColor(R.color.ink)); minHeight = dp(48)
+        }
+        fun refreshUi() {
+            if (output.text.toString() != DisplayControl.status) output.text = DisplayControl.status
+            commandsOutput.text = DisplayControl.commandSummary
+            offButtons.forEach { it.isEnabled = confirmed.isChecked && DisplayControl.trialReady }
+        }
+        fun work(action: () -> String) {
+            DisplayControl.work(action) { runOnUiThread { if (!isDestroyed && !isFinishing) refreshUi() } }
+        }
+        fun button(label: String, action: () -> Unit): Button = Button(this).also {
+            it.text = label; it.isAllCaps = false; it.minHeight = dp(52)
+            it.setOnClickListener { try { action() } catch (error: Exception) { DisplayControl.recordFailure(error); refreshUi() } }
+            column.addView(it, LinearLayout.LayoutParams(-1, -2))
+        }
+        fun localDisplays() {
+            displayOutput.text = try {
+                val displays = getSystemService(DisplayManager::class.java).displays.joinToString("\n") {
+                    val state = when (it.state) { Display.STATE_ON -> "ON"; Display.STATE_OFF -> "OFF"; else -> "상태 코드 ${it.state}" }
+                    "ID ${it.displayId} · ${it.name} · $state"
+                }
+                "앱에서 조회한 논리 화면\n$displays\n잠금: ${getSystemService(KeyguardManager::class.java).isKeyguardLocked}\n이 값은 실제 패널 전원·물리 매핑의 증거가 아닙니다."
+            } catch (error: Exception) { "앱 화면 정보 조회 실패: ${error.javaClass.simpleName}" }
+        }
+        fun requireScreenOn() {
+            check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked) { "DEVICE_LOCKED" }
+            check(getSystemService(DisplayManager::class.java).getDisplay(0)?.state == Display.STATE_ON) { "DISPLAY_NOT_ON" }
+        }
+        button("1. Shizuku 권한 요청") { DisplayControl.requestPermission(); refreshUi() }
+        button("2. 승인 후 shell 서비스 연결") { DisplayControl.bind(); refreshUi() }
         button("3. display 0 매핑·명령 조회") {
-            val dm = getSystemService(DisplayManager::class.java)
-            val summary = dm.displays.joinToString("\n") { "id=${it.displayId}, name=${it.name}, state=${it.state} (ON=${Display.STATE_ON}, OFF=${Display.STATE_OFF})" }
-            val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
-            work { "KeyguardLocked=$locked\n$summary\nDisplay state is not proof of panel power.\n" + DisplayControl.inspect() }
+            confirmed.isChecked = false
+            localDisplays() // remains visible even if Shizuku or command inspection fails
+            work { DisplayControl.inspect() }
         }
-        button("4. 화면 ON 상태에서 복구 명령 사전 검사") { work { DisplayControl.checkRecovery() } }
-        val confirmed = CheckBox(this).apply { text = "이 기기·현재 펌웨어에서 ADB 복구 경로와 display 0의 실제 패널 매핑을 별도 검증했습니다. ON 상태 명령 성공만으로 확인하지 않았습니다." }
+        button("4. 화면 ON 상태에서 복구 명령 사전 검사") {
+            confirmed.isChecked = false
+            localDisplays()
+            work { requireScreenOn(); DisplayControl.checkRecovery() }
+        }
         column.addView(confirmed)
+        confirmed.setOnCheckedChangeListener { _, _ -> refreshUi() }
+        text("OFF 버튼은 명령 지원·복구 사전 검사·WebRTC 연결·외부 복구 확인 조건이 충족될 때만 활성화됩니다. 실제 복구와 타이머 생존은 여전히 미검증입니다.")
         fun trial(seconds: Int) {
-            if (!confirmed.isChecked) { output.text = "외부 복구 검증 확인이 필요합니다."; return }
-            if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) { output.text = "기기를 직접 잠금 해제하세요."; return }
+            check(confirmed.isChecked && DisplayControl.trialReady) { "RECOVERY_NOT_VERIFIED" }
+            requireScreenOn()
             AlertDialog.Builder(this).setTitle("${seconds}초 제한 패널 OFF 시험")
-                .setMessage("5초 뒤 실행합니다. 게임으로 돌아가세요. 복구 경로가 검증되지 않았다면 취소하세요. 영상·입력 유지는 미검증입니다.")
+                .setMessage("5초 뒤 실행합니다. 게임으로 돌아가세요. 외부 복구가 충분히 검증되지 않았다면 취소하세요. 영상·입력·실제 복구는 미검증입니다.")
                 .setNegativeButton("취소", null).setPositiveButton("검증했으며 시험 시작") { _, _ ->
                     confirmed.isChecked = false
-                    handler.postDelayed({ work {
-                        check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked) { "DEVICE_LOCKED" }
-                        DisplayControl.turnOff(seconds, true)
-                    } }, 5000)
+                    handler.postDelayed({ work { requireScreenOn(); DisplayControl.turnOff(seconds, true) } }, 5000)
                 }.show()
         }
-        button("5. 30초 OFF 시험 (5초 후)") { trial(30) }
-        button("30초 시험 통과 후: 330초 시험 (5초 후)") { trial(330) }
-        button("즉시 복구 · 입력 해제") { handler.removeCallbacksAndMessages(null); work { DisplayControl.restore() } }
-        button("상태 다시 보기") { output.text = DisplayControl.status }
+        offButtons += button("5. 30초 OFF 시험 (5초 후)") { trial(30) }
+        offButtons += button("30초 시험 통과 후: 330초 시험 (5초 후)") { trial(330) }
+        button("즉시 복구 · 입력 해제") {
+            handler.removeCallbacksAndMessages(null)
+            confirmed.isChecked = false
+            work { DisplayControl.restore() }
+            refresh?.let { handler.postDelayed(it, 1000) }
+        }
+        button("상태 다시 보기") { localDisplays(); refreshUi() }
+        button("전체 진단 보기") {
+            val details = TextView(this).apply {
+                text = displayOutput.text.toString() + "\n\n" + DisplayControl.diagnostics
+                textSize = 12f; setPadding(dp(16), dp(16), dp(16), dp(16)); setTextIsSelectable(true)
+            }
+            AlertDialog.Builder(this).setTitle("패널 사전 검사 전체 진단")
+                .setView(ScrollView(this).apply { addView(details) }).setPositiveButton("닫기", null).show()
+        }
+        refresh = object : Runnable { override fun run() { refreshUi(); handler.postDelayed(this, 1000) } }
+        refreshUi()
     }
+    override fun onResume() { super.onResume(); refresh?.let { handler.post(it) } }
+    override fun onPause() { refresh?.let { handler.removeCallbacks(it) }; super.onPause() }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); super.onDestroy() }
 }
