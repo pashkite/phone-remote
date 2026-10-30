@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "repository": "pashkite/phone-remote",
+  "branch": "main",
+  "project_id": "appgprj_6a589c9a8e588191830cce459783c685",
+  "production_url": "https://remote.ashkite.kro.kr",
+  "last_successful_github_sha": null,
+  "last_successful_sites_sha": "95f245704f0346037707924fe6bf69adfe216fb3",
+  "last_successful_version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_1e0f943ff7408191afd4f821d2857c87",
+  "last_successful_deployment_id": "appgdep_6acf5ed69de48191931c07f560bc41ec",
+  "last_checked_github_sha": null,
+  "lock": {
+    "owner": "setup-20261031-initial",
+    "acquired_at": "2026-10-30T21:49:30Z"
+  },
+  "pending": null,
+  "last_result": "initial setup; live version 47; synchronization not yet deployed"
+}
