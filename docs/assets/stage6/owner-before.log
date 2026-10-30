@@ -1,0 +1,35 @@
+✔ session DELETE cannot erase another owner’s ICE candidates (93.274149ms)
+✔ malformed JSON field types fail as 400 instead of crashing handlers (54.303127ms)
+✔ closed device decisions never claim approval/open/rejection success (103.326081ms)
+✔ parallel invalid pairing attempts cannot bypass the 20-attempt window (359.915816ms)
+✔ real handlers complete pairing, consent, SDP, ICE, live lease and revocation in local D1 (398.472387ms)
+✔ expired or superseded pairing codes cannot register a device (74.009296ms)
+✖ changing the configured owner revokes old-owner device polling and live leases (33.072082ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 6
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2184.368719
+
+✖ failing tests:
+
+test at tests/api-integration.test.mjs:69:1
+✖ changing the configured owner revokes old-owner device polling and live leases (33.072082ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  200 !== 401
+  
+      at TestContext.<anonymous> (file:///workspace/phone-remote/tests/api-integration.test.mjs:72:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 401,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

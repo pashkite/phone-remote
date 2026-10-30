@@ -1,0 +1,6 @@
+> Task :app:packageRelease
+> Task :app:createReleaseApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleRelease
+
+BUILD SUCCESSFUL in 41s
+166 actionable tasks: 25 executed, 141 up-to-date

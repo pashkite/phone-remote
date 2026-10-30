@@ -1,0 +1,4 @@
+
+> galaxy-remote-control@0.1.0 lint
+> bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next
+

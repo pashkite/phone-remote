@@ -1,0 +1,58 @@
+✖ session DELETE cannot erase another owner’s ICE candidates (55.830717ms)
+✖ malformed JSON field types fail as 400 instead of crashing handlers (40.005941ms)
+✖ closed device decisions never claim approval/open/rejection success (45.877621ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 0
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1375.138663
+
+✖ failing tests:
+
+test at tests/api-integration.test.mjs:14:1
+✖ session DELETE cannot erase another owner’s ICE candidates (55.830717ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  200 !== 404
+  
+      at TestContext.<anonymous> (file:///workspace/phone-remote/tests/api-integration.test.mjs:18:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 404,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/api-integration.test.mjs:20:1
+✖ malformed JSON field types fail as 400 instead of crashing handlers (40.005941ms)
+  TypeError: payload?.code?.replace is not a function
+      at Object.POST5 (file:///workspace/phone-remote/.sites-runtime/qa-api-iq3djw/routes.mjs:525:31)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///workspace/phone-remote/tests/api-integration.test.mjs:23:16)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests/api-integration.test.mjs:26:1
+✖ closed device decisions never claim approval/open/rejection success (45.877621ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  200 !== 409
+  
+      at TestContext.<anonymous> (file:///workspace/phone-remote/tests/api-integration.test.mjs:28:71)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 409,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
