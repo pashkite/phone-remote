@@ -4,6 +4,10 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { createPortal } from "react-dom";
 import { normalizedVideoPoint } from "./remote-geometry";
 import ThemeToggle from "./components/theme-toggle";
+import { useInteraction } from "../lib/interaction/use-interaction";
+import type { InteractionEngine } from "../lib/interaction/engine";
+import InteractionControls from "./components/interaction-controls";
+import InteractionOverlay from "./components/interaction-overlay";
 import RemoteTools from "./components/remote-tools";
 import { LiveTouchSender } from "../lib/remote/live-touch";
 import { RemoteClient } from "../lib/remote/client";
@@ -135,6 +139,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalCloseRef = useRef(false);
+  const interactionEngineRef = useRef<InteractionEngine | null>(null);
+  const modePointersRef = useRef(new Map<number,{kind:"mapped"|"pointer"|"pan";key?:string;x:number;y:number;target:HTMLDivElement}>());
   const resolutionRef = useRef<ResolutionSetting>(1080);
   const frameRateRef = useRef<FrameRateSetting>(30);
 
@@ -162,6 +168,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     const { videoWidth, videoHeight } = video;
     if (!videoWidth || !videoHeight) return;
     const nextRatio = videoWidth / videoHeight;
+    if (Math.abs(nextRatio - detachedRatioRef.current) > .01) interactionEngineRef.current?.cancel("화면 방향 변경");
     detachedRatioRef.current = nextRatio;
     setVideoAspectRatio((current) => Math.abs(current - nextRatio) < 0.001 ? current : nextRatio);
     if (detachedWindow && !detachedWindow.closed) {
@@ -214,6 +221,28 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   );
   const connected = connection === "connected";
   const waiting = connection === "waiting";
+  const interaction = useInteraction({ owner: email, device: selectedDeviceId, personal: pcMode === "personal", connected, blocked: Boolean(dialog),
+    client: toolsClient, send: sendPayload, viewer: viewerRef, detached: detachedWindow,
+    releaseLegacy: releaseModeInputs,
+    applyQuality: quality => {
+      modeRef.current=quality.auto?"auto":"custom";setQualityMode(quality.auto?"auto":"custom");adaptiveRef.current.reset();
+      const edge=quality.auto?1080:quality.edge===720&&connected&&!toolsRef.current?.supports("quality720")?1080:quality.edge;
+      const fps=quality.auto?30:edge===1440&&quality.fps===60?30:quality.fps;
+      resolutionRef.current=edge;frameRateRef.current=fps;setResolution(edge);setFrameRate(fps);
+      if(connected)sendPayload({type:"quality",shortEdge:edge,fps});
+    },
+  });
+  useEffect(()=>{interactionEngineRef.current=interaction.engine;},[interaction.engine]);
+  function releaseModeInputs() {
+    livePointerRef.current?.sender.finish("cancel");livePointerRef.current?.cleanup();livePointerRef.current=null;
+    const held=pointerStartRef.current;pointerStartRef.current=null;
+    if(held?.target.hasPointerCapture(held.pointerId))held.target.releasePointerCapture(held.pointerId);
+    const pointers=[...modePointersRef.current];modePointersRef.current.clear();
+    for(const [id,pointer] of pointers)if(pointer.target.hasPointerCapture(id))pointer.target.releasePointerCapture(id);
+    if(wheelFlushTimerRef.current)window.clearTimeout(wheelFlushTimerRef.current);wheelFlushTimerRef.current=null;wheelDeltaRef.current={x:0,y:0};
+  }
+  function focusInteractionViewer() { phoneViewRef.current?.focus();interaction.activity(); }
+
   const initials = useMemo(
     () =>
       displayName
@@ -280,6 +309,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       reconnectTimerRef.current = null;
       reconnectAttemptsRef.current = 0;
     }
+    interactionEngineRef.current?.cancel("연결 종료");
     stopTimers();
     livePointerRef.current?.sender.finish("cancel");
     livePointerRef.current?.cleanup();
@@ -784,6 +814,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }
 
   function sendCommand(command: string, label: string) {
+    interactionEngineRef.current?.cancel("휴대폰 탐색");
     livePointerRef.current?.sender.finish("cancel");
     livePointerRef.current?.cleanup();
     livePointerRef.current = null;
@@ -919,7 +950,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     livePointerRef.current = null;
     const held = pointerStartRef.current; pointerStartRef.current = null;
     if (held?.target.hasPointerCapture(held.pointerId)) held.target.releasePointerCapture(held.pointerId);
-  }, [metrics.width, metrics.height]);
+    interactionEngineRef.current?.cancel("화면 회전/해상도 변경");
+    releaseModeInputs();
+  }, [metrics.width, metrics.height, videoAspectRatio]);
 
   function normalizedPointer(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
     const video = targetVideo ?? videoRef.current;
@@ -1016,6 +1049,65 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       right: { fromX: 0.24, fromY: 0.5, toX: 0.78, toY: 0.5 },
     } as const;
     sendPayload({ type: "swipe", ...points[direction], durationMs: 220 });
+  }
+
+  function onModePointerDown(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
+    interaction.activity();
+    const p=interaction.profile;
+    if(interaction.editing){const point=normalizedPointer(event,targetVideo);if(point.inside)interaction.pick(point.x,point.y);event.preventDefault();return;}
+    if(!connected||dialog)return;
+    interaction.engine.manual();interaction.engine.time(performance.now());
+    if(p.mode!=="game"&&p.zoom>1&&event.shiftKey){
+      event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);
+      modePointersRef.current.set(event.pointerId,{kind:"pan",x:event.clientX,y:event.clientY,target:event.currentTarget});return;
+    }
+    if(p.mode==="game"&&p.mappingEnabled){
+      const point=normalizedPointer(event,targetVideo);if(!point.inside)return;
+      event.preventDefault();event.currentTarget.focus();
+      const key=`Mouse${event.button}`,mapped=p.bindings.some(b=>b.key===key);
+      const accepted=mapped?interaction.engine.button(key,true):interaction.engine.down(`mouse:${event.pointerId}`,point);
+      if(!accepted){setToast("입력 거부: 새 앱 지원과 멀티터치 실험 설정을 확인하세요.");return;}
+      event.currentTarget.setPointerCapture(event.pointerId);
+      modePointersRef.current.set(event.pointerId,{kind:mapped?"mapped":"pointer",key,x:event.clientX,y:event.clientY,target:event.currentTarget});return;
+    }
+    onPointerDown(event,targetVideo);
+  }
+  function onModePointerMove(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
+    interaction.activity();const pointer=modePointersRef.current.get(event.pointerId);
+    if(pointer?.kind==="pan"){
+      const b=event.currentTarget.getBoundingClientRect(),z=interaction.profile.zoom;
+      const dx=event.clientX-pointer.x,dy=event.clientY-pointer.y;pointer.x=event.clientX;pointer.y=event.clientY;
+      interaction.setPan(old=>({x:Math.max(-(z-1)*b.width/2,Math.min((z-1)*b.width/2,old.x+dx)),y:Math.max(-(z-1)*b.height/2,Math.min((z-1)*b.height/2,old.y+dy))}));return;
+    }
+    if(pointer?.kind==="pointer"){interaction.engine.move(`mouse:${event.pointerId}`,normalizedPointer(event,targetVideo));return;}
+    if(pointer||interaction.editing)return;
+    onPointerMove(event,targetVideo);
+  }
+  function onModePointerUp(event: React.PointerEvent<HTMLDivElement>, targetVideo?: HTMLVideoElement | null) {
+    const pointer=modePointersRef.current.get(event.pointerId);
+    if(pointer){modePointersRef.current.delete(event.pointerId);if(pointer.kind==="mapped")interaction.engine.button(pointer.key!,false);if(pointer.kind==="pointer")interaction.engine.up(`mouse:${event.pointerId}`);if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);return;}
+    if(interaction.editing)return;
+    const start=pointerStartRef.current;
+    if(interaction.profile.mode!=="game"&&start&&!start.moved&&Math.hypot(event.clientX-start.clientX,event.clientY-start.clientY)<8&&interaction.engine.pageClick(normalizedPointer(event,targetVideo).x)){
+      onPointerCancel(event);event.currentTarget.focus();return;
+    }
+    onPointerUp(event,targetVideo);
+    if(interaction.profile.mode!=="game")event.currentTarget.focus();
+  }
+  function onModePointerCancel(event: React.PointerEvent<HTMLDivElement>) {
+    const pointer=modePointersRef.current.get(event.pointerId);
+    if(pointer){modePointersRef.current.delete(event.pointerId);interaction.engine.cancel("포인터 취소");return;}
+    onPointerCancel(event);
+  }
+  function onModeWheel(event: React.WheelEvent<HTMLDivElement>) {
+    interaction.activity();
+    if(interaction.editing){event.preventDefault();return;}
+    if(interaction.profile.mode!=="game"){
+      if(!connected||dialog)return;event.preventDefault();event.currentTarget.focus();
+      interaction.engine.wheel(event.deltaY||event.deltaX,event.deltaMode,event.currentTarget.clientHeight);return;
+    }
+    if(interaction.profile.mappingEnabled&&interaction.engine.pointerCount){event.preventDefault();return;}
+    onRemoteWheel(event);
   }
 
   function onRemoteWheel(event: React.WheelEvent<HTMLDivElement>) {
@@ -1116,7 +1208,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       </header>
 
       <section className="console-grid" aria-label="원격 조작 화면">
-        <article className="screen-card" ref={viewerRef}>
+        <article className={`screen-card interaction-view mode-${interaction.profile.mode} ${interaction.profile.mode!=="game"&&interaction.profile.minimal?"reading-minimal":""} ${interaction.status.idle?"reading-idle":""}`} ref={viewerRef}>
+          <InteractionControls control={interaction} personal={pcMode==="personal"} connected={connected} focusViewer={focusInteractionViewer}/>
+          <p className="interaction-note">모드: {interaction.profile.mode==="game"?"게임":interaction.profile.mode==="novel"?"소설":"웹툰"} · 모드 전환은 연결을 유지합니다.</p>
           <div className="card-heading">
             <div><p className="eyebrow">LIVE SCREEN</p><h2>휴대폰 화면</h2></div>
             <div className="screen-heading-actions">
@@ -1196,24 +1290,28 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               tabIndex={connected ? 0 : -1}
               role="application"
               aria-label="연결된 휴대폰 원격 화면"
-              onPointerDown={(event) => onPointerDown(event)}
-              onPointerMove={(event) => onPointerMove(event)}
-              onPointerUp={(event) => onPointerUp(event)}
-              onPointerCancel={onPointerCancel}
-              onLostPointerCapture={onPointerCancel}
-              onWheel={onRemoteWheel}
-              onKeyDown={onPhoneKeyDown}
+              onPointerDown={(event) => onModePointerDown(event)}
+              onPointerMove={(event) => onModePointerMove(event)}
+              onPointerUp={(event) => onModePointerUp(event)}
+              onPointerCancel={onModePointerCancel}
+              onLostPointerCapture={onModePointerCancel}
+              onWheel={onModeWheel}
+              onKeyDown={e=>{if(interaction.editing){e.preventDefault();return;}if(interaction.profile.mode!=="game"||!interaction.profile.mappingEnabled)onPhoneKeyDown(e);}}
+              onContextMenu={e=>{if(interaction.profile.mode==="game"&&interaction.profile.mappingEnabled)e.preventDefault();}}
             >
               <video
                 ref={videoRef}
+                style={interaction.profile.mode!=="game"?{transform:`translate(${interaction.pan.x}px, ${interaction.pan.y}px) scale(${interaction.profile.zoom})`}:undefined}
                 autoPlay
                 playsInline
                 aria-label="연결된 휴대폰 화면"
                 onLoadedMetadata={(event) => syncVideoAspectRatio(event.currentTarget)}
                 onResize={(event) => syncVideoAspectRatio(event.currentTarget)}
               />
+              {interaction.editing&&<InteractionOverlay profile={interaction.profile} selected={interaction.selectedBinding} video={videoRef} host={phoneViewRef}/>}
               <input
                 ref={keyboardRef}
+                disabled={interaction.editing}
                 className="remote-keyboard-capture"
                 aria-label="휴대폰에 보낼 키보드 입력"
                 autoCapitalize="off"
@@ -1244,12 +1342,12 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               tabIndex={connected ? 0 : -1}
               role="application"
               aria-label="분리된 휴대폰 원격 화면"
-              onPointerDown={(event) => onPointerDown(event, detachedVideoRef.current)}
-              onPointerMove={(event) => onPointerMove(event, detachedVideoRef.current)}
-              onPointerUp={(event) => onPointerUp(event, detachedVideoRef.current)}
-              onPointerCancel={onPointerCancel}
-              onLostPointerCapture={onPointerCancel}
-              onWheel={onRemoteWheel}
+              onPointerDown={(event) => onModePointerDown(event, detachedVideoRef.current)}
+              onPointerMove={(event) => onModePointerMove(event, detachedVideoRef.current)}
+              onPointerUp={(event) => onModePointerUp(event, detachedVideoRef.current)}
+              onPointerCancel={onModePointerCancel}
+              onLostPointerCapture={onModePointerCancel}
+              onWheel={onModeWheel}
               onKeyDown={(event) => { handleDirectionKey(event); }}
             >
               <video
@@ -1257,7 +1355,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 autoPlay
                 muted
                 playsInline
-                style={{ opacity: detachedOpacity / 100 }}
+                style={{ opacity: detachedOpacity / 100, transform: interaction.profile.mode!=="game"?`translate(${interaction.pan.x}px, ${interaction.pan.y}px) scale(${interaction.profile.zoom})`:undefined }}
                 aria-label="분리된 휴대폰 화면"
                 onCanPlay={(event) => { void event.currentTarget.play(); }}
                 onLoadedMetadata={(event) => {
@@ -1269,6 +1367,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               />
               <input
                 ref={detachedKeyboardRef}
+                disabled={interaction.editing}
                 className="detached-keyboard-capture"
                 aria-label="분리 창 휴대폰 키보드 입력"
                 autoCapitalize="off"

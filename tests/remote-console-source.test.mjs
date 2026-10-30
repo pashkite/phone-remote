@@ -14,7 +14,7 @@ const webRtcSession = await readFile(
 
 test("detached opacity is visual-only and bounded", () => {
   assert.match(source, /aria-label="분리 창 투명도"/);
-  assert.match(source, /style=\{\{ opacity: detachedOpacity \/ 100 \}\}/);
+  assert.match(source, /style=\{\{ opacity: detachedOpacity \/ 100,/);
   assert.match(source, /<option value=\{25\}>투명도 25%<\/option>/);
   assert.match(source, /<option value=\{100\}>투명도 100%<\/option>/);
 });

@@ -390,3 +390,28 @@ input,select,textarea { color:var(--ink); }
 .android-project-link:hover { border-color:var(--muted); background:var(--surface-soft); transform:none; }
 .remote-tools details,.file-drop { border-color:var(--line); }
 .file-drop,.remote-tools pre { background:var(--surface-soft); color:var(--ink); }
+
+/* Stage 4: functional controls, scoped to the remote viewer. */
+.interaction-controls { border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:14px; display:grid; gap:10px; margin-bottom:16px; }
+.interaction-controls label { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; color:var(--ink); }
+.interaction-controls input[type=range] { max-width:220px; flex:1; min-width:90px; }
+.interaction-controls input:not([type=range]):not([type=checkbox]),.interaction-controls select { background:var(--surface-soft); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px; max-width:100%; }
+.interaction-controls button { background:var(--surface-soft); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:7px 10px; font-size:13px; }
+.interaction-controls button[aria-pressed=true] { background:var(--primary); color:white; }
+.interaction-controls button:disabled { opacity:.45; cursor:not-allowed; }
+.interaction-controls fieldset { border:1px solid var(--line); padding:10px; display:grid; gap:10px; min-width:0; }
+.interaction-row,.interaction-mode-tabs { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.interaction-note { font-size:12px; line-height:1.6; color:var(--muted); margin:0; overflow-wrap:anywhere; }
+.interaction-controls details { display:grid; gap:8px; }
+.interaction-controls details>label,.interaction-controls details>p { margin:8px 0; }
+.interaction-view.mode-novel .phone-view,.interaction-view.mode-webtoon .phone-view { width:min(680px,100%); border-radius:8px; }
+.interaction-view.mode-novel .screen-stage,.interaction-view.mode-webtoon .screen-stage { background:#0b0d10; padding:12px; border-radius:10px; }
+.interaction-overlay { position:absolute; pointer-events:none; z-index:6; }
+.mapping-marker { position:absolute; display:grid; place-items:center; transform:translate(-50%,-50%); border:1px solid #a6b1c0; border-radius:50%; background:#10182099; color:#fff; }
+.mapping-marker.selected { border:2px solid #72b7ff; background:#183a6688; }
+.mapping-marker small { font-size:10px; white-space:nowrap; }
+.reading-minimal.reading-idle .screen-heading { opacity:0; pointer-events:none; }
+.reading-minimal.reading-idle .phone-view,.reading-minimal.reading-idle .phone-view.is-live { cursor:none; }
+.reading-minimal .screen-heading:focus-within { opacity:1; pointer-events:auto; }
+.interaction-view video { transform-origin:center; }
+.reading-minimal.reading-idle .interaction-controls:not(:focus-within) { opacity:0; pointer-events:none; }

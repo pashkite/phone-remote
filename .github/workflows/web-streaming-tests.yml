@@ -22,3 +22,29 @@ jobs:
           cache: npm
       - run: bash scripts/sites-env.sh -- bash scripts/install-ci.sh
       - run: bash scripts/test-web-streaming.sh
+  browser-interactions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: bash scripts/sites-env.sh -- bash scripts/install-ci.sh
+      - run: npm install --prefix /tmp/galaxy-browser --no-audit --no-fund playwright@1.56.1
+      - run: /tmp/galaxy-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Start local test server
+        run: |
+          bash scripts/sites-env.sh -- npm run dev -- --port 5175 > /tmp/galaxy-browser-dev.log 2>&1 &
+          node --input-type=module <<'JS'
+          for (let i = 0; i < 60; i++) {
+            try { if ((await fetch('http://127.0.0.1:5175')).ok) process.exit(0); } catch {}
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          throw new Error('Local server did not become ready');
+          JS
+      - name: Browser and protocol simulation (no real Android device)
+        env:
+          PLAYWRIGHT_MODULE: /tmp/galaxy-browser/node_modules/playwright/index.mjs
+        run: node scripts/test-interaction-browser.mjs
