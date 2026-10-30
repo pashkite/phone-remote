@@ -46,6 +46,12 @@ try{
  await page.waitForFunction(()=>window.__sent.some(m=>m.type==='pointerFrame'&&m.points.length===2&&m.points.some(p=>p.pointerId==='joystick'&&p.x>.22&&p.y<.76)));
  await page.keyboard.up('w');await page.keyboard.up('d');await page.keyboard.up('f');
  await page.waitForFunction(()=>window.__sent.some(m=>m.type==='pointerFrame'&&m.points.some(p=>p.phase==='up')));
+ await controls.getByRole('button',{name:'화면 입력 활성화'}).click();await page.keyboard.down('w');
+ const heldView=page.getByLabel('연결된 휴대폰 원격 화면');await heldView.scrollIntoViewIfNeeded();const heldBox=await heldView.boundingBox();
+ await page.mouse.move(heldBox.x+heldBox.width/2,heldBox.y+heldBox.height/2);await page.mouse.down();
+ await heldView.dispatchEvent('pointercancel',{pointerId:1,pointerType:'mouse',bubbles:true});
+ await page.waitForFunction(()=>window.__sent.filter(m=>m.type==='pointerFrame').some(m=>m.points.some(p=>p.pointerId==='mouse:1'&&p.phase==='cancel')&&m.points.some(p=>p.pointerId==='joystick'&&p.phase==='move')));
+ await page.mouse.up();await page.keyboard.up('w');
  const beforeModifier=await page.evaluate(()=>window.__sent.length);
  await page.keyboard.down('w');await page.keyboard.down('Control');await page.keyboard.up('w');await page.keyboard.up('Control');
  await page.waitForFunction(n=>window.__sent.slice(n).some(m=>m.type==='pointerFrame'&&m.points.some(p=>p.pointerId==='joystick'&&p.phase==='up')),beforeModifier);

@@ -1096,7 +1096,13 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }
   function onModePointerCancel(event: React.PointerEvent<HTMLDivElement>) {
     const pointer=modePointersRef.current.get(event.pointerId);
-    if(pointer){modePointersRef.current.delete(event.pointerId);interaction.engine.cancel("포인터 취소");return;}
+    if(pointer){
+      modePointersRef.current.delete(event.pointerId);
+      if(pointer.kind==="mapped")interaction.engine.up(`mapped:${pointer.key}`,true);
+      if(pointer.kind==="pointer")interaction.engine.up(`mouse:${event.pointerId}`,true);
+      if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
     onPointerCancel(event);
   }
   function onModeWheel(event: React.WheelEvent<HTMLDivElement>) {
