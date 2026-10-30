@@ -19,7 +19,7 @@
     "version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_3a51f06b9790819190b1b5ac261c76aa",
     "previous_version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_1e0f943ff7408191afd4f821d2857c87",
     "previous_deployment_id": "appgdep_6acf5ed69de48191931c07f560bc41ec",
-    "phase": "publishing_requested",
+    "phase": "deployed_health_check",
     "validation": {
       "build": "passed",
       "typescript": "passed",
@@ -36,7 +36,8 @@
         "production POST/device authorization smoke test",
         "production forged identity-header test"
       ]
-    }
+    },
+    "deployment_id": "appgdep_6ae512f505508191a4a546bef3b548b1"
   },
   "last_result": "version 48 saved, validated and ready for unattended initial deployment"
 }
