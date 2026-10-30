@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { normalizedVideoPoint } from "./remote-geometry";
 import TestConnectionInfo from "./components/test-connection-info";
 import ThemeToggle from "./components/theme-toggle";
+import UiIcon, { type UiIconName } from "./components/ui-icon";
 import { useInteraction } from "../lib/interaction/use-interaction";
 import type { InteractionEngine } from "../lib/interaction/engine";
 import InteractionControls from "./components/interaction-controls";
@@ -20,7 +21,7 @@ import { resolveShortcut } from "../lib/remote/shortcuts";
 
 type ConnectionState = "offline" | "waiting" | "reconnecting" | "connected";
 type PcMode = "personal" | "public";
-type DialogState = "pair" | "disconnect" | "settings" | null;
+type DialogState = "pair" | "disconnect" | "settings" | "devices" | null;
 type ResolutionSetting = 540 | 720 | 1080 | 1440;
 type FrameRateSetting = 24 | 30 | 60;
 
@@ -68,10 +69,10 @@ function supportsNotificationApproval(version: string) {
 }
 
 const controls = [
-  { command: "back", icon: "←", label: "뒤로" },
-  { command: "home", icon: "⌂", label: "홈" },
-  { command: "recents", icon: "▤", label: "최근" },
-  { command: "lock", icon: "▣", label: "잠금" },
+  { command: "back", icon: "back", label: "뒤로" },
+  { command: "home", icon: "home", label: "홈" },
+  { command: "recents", icon: "recents", label: "최근" },
+  { command: "lock", icon: "lock", label: "잠금" },
 ];
 
 async function responseError(response: Response, fallback: string) {
@@ -86,6 +87,7 @@ async function responseError(response: Response, fallback: string) {
 
 export default function RemoteConsole({ displayName, email, signOutPath }: RemoteConsoleProps) {
   const [inspectorOpen,setInspectorOpen]=useState(true);
+  const [devicePanelOpen, setDevicePanelOpen] = useState(false);
   const [phase,setPhase]=useState("연결 전");
   const [pairClock,setPairClock]=useState(0);
   const [connection, setConnection] = useState<ConnectionState>("offline");
@@ -1259,29 +1261,52 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }
 
   return (
-    <main className="remote-shell">
-      <header className="topbar">
-        <div className="brand-lockup">
-          <Image unoptimized className="brand-symbol" src="/brand/symbol.svg" width="32" height="32" alt="" />
-          <div><h1>린로 <span className="version-label">Linro</span></h1></div>
-          <span role="status" className={`connection-pill ${connection}`}><span className="status-dot" />{phaseLabel}</span>
+    <main className="remote-shell dashboard-shell">
+      <nav className="app-nav" aria-label="기본 탐색">
+        <div className="brand-lockup"><Image unoptimized className="brand-symbol" src="/brand/symbol.svg" width="36" height="36" alt="" /><h1><span className="brand-korean">린로</span> <span className="version-label">Linro</span></h1></div>
+        <div className="app-nav-links">
+          <button type="button" aria-label="원격 제어" aria-current={dialog !== "devices" && dialog !== "settings" ? "page" : undefined} onClick={() => {setDialog(null); viewerRef.current?.scrollIntoView({block:"start"});}}><UiIcon name="desktop"/><span>원격 제어</span></button>
+          <button type="button" aria-label="내 기기" aria-current={dialog === "devices" ? "page" : undefined} onClick={() => setDialog("devices")}><UiIcon name="devices"/><span>내 기기</span></button>
+          <button type="button" aria-label="설정" aria-current={dialog === "settings" ? "page" : undefined} onClick={() => setDialog("settings")}><UiIcon name="settings"/><span>설정</span></button>
         </div>
+        <div className="nav-help"><UiIcon name="shield" size={24}/><strong>허용한 동안만, 안전하게</strong><p>기기 등록과 연결 권한을 확인하고 시작하세요.</p><button type="button" onClick={()=>setDialog("devices")}>연결 준비 확인 <UiIcon name="next" size={15}/></button></div>
+        <div className="nav-footer"><span>Link Road</span><small>{pcMode === "public" ? "공용 PC · 설정 미저장" : "개인 PC · 설정 기억"}</small></div>
+      </nav>
+      <aside className={`device-panel ${devicePanelOpen ? "is-open" : ""}`} aria-label="기기 목록 패널">
+        <div className="device-panel-title"><div><p className="eyebrow">YOUR DEVICES</p><h2>내 기기 <small>{devices.length}</small></h2></div><button type="button" className="icon-button" aria-label="기기 목록 새로고침" onClick={()=>void loadDevices()}><UiIcon name="refresh" size={18}/></button></div>
+        <p className="device-panel-description">등록한 갤럭시와 연결하세요.</p>
+        <button className="device-panel-toggle" type="button" aria-expanded={devicePanelOpen} aria-controls="device-cards" onClick={()=>setDevicePanelOpen(!devicePanelOpen)}><UiIcon name="phone" size={18}/>{selectedDevice?.name ?? "등록된 기기 없음"}<UiIcon name="next" size={16}/></button>
+        <div id="device-cards" className="device-cards">
+          {deviceLoadError && <div className="device-list-error"><p>{deviceLoadError}</p><button type="button" onClick={()=>void loadDevices()}>목록 다시 불러오기</button></div>}
+          {devices.length ? devices.map(device => {
+            const recent = Boolean(device.online && device.lastSeenAt && Date.now()-device.lastSeenAt<45_000);
+            return <button key={device.id} type="button" className="device-card" aria-pressed={selectedDeviceId===device.id} onClick={()=>{if(selectedDeviceId!==device.id){void closeConnection(true,true);setSelectedDeviceId(device.id);}setDevicePanelOpen(false);}}>
+              <UiIcon name="phone" size={28}/><span><strong>{device.name}</strong><small><span className={`status-dot ${recent?"online":""}`}/>{connected && connectionDeviceRef.current===device.id ? "연결 중" : recent?"최근 응답 있음":device.online===false?"오프라인":"상태 확인 불가"}</small>{Number.isFinite(device.batteryLevel)&&<small>배터리 {device.batteryLevel}%</small>}</span>
+            </button>;
+          }) : <p className="empty-device-list">아직 등록된 기기가 없습니다.<br/>휴대폰 앱의 등록 코드를 연결해 주세요.</p>}
+          <button className="add-device-button" type="button" onClick={openPairing}><UiIcon name="plus" size={18}/>기기 추가</button>
+          <button className="manage-devices-button" type="button" onClick={()=>setDialog("devices")}>등록 기기 관리</button>
+        </div>
+        <div className="device-panel-note"><UiIcon name="info" size={17}/><p>최근 응답은 원격 연결 완료와 다릅니다. 연결은 휴대폰에서 허용한 동안 유지됩니다.</p></div>
+      </aside>
+      <header className="topbar">
+        <div className="session-heading"><span role="status" className={`connection-pill ${connection}`}><span className="status-dot" />{phaseLabel}</span><div className="session-identity"><span className="session-device">{selectedDevice?.name ?? "연결할 기기를 선택하세요"}</span><small>{connected && metrics.path ? metrics.path === "turn" ? "중계 연결" : "직접 연결" : "연결 경로 확인 불가"} · 배터리 {Number.isFinite(selectedDevice?.batteryLevel) ? `${selectedDevice?.batteryLevel}%` : "확인 불가"}</small></div></div>
         <div className="owner-area">
           <ThemeToggle />
           <div className="pc-session"><span>{pcMode === "public" ? "공용 PC 사용 중" : "개인 PC"}</span><button type="button" onClick={() => void endPublicSession()}>사용 종료</button></div>
           <div className="avatar" aria-hidden="true">{initials}</div>
-          <div className="owner-copy"><strong>{displayName}</strong><span>{email ? "Owner" : "소유자 전용"}</span></div>
-          <button className="icon-button" type="button" aria-label="설정" onClick={() => setDialog("settings")}>⚙</button>
+          <div className="owner-copy"><strong>{displayName}</strong><span>{email ? "소유자" : "소유자 전용"}</span></div>
+          <button className="disconnect-button topbar-disconnect" type="button" disabled={!connected&&!waiting&&connection!=="reconnecting"} onClick={()=>setDialog("disconnect")}>연결 종료</button>
         </div>
       </header>
 
-      <div className="workspace-title"><div><p className="eyebrow">YOUR REMOTE SPACE</p><h2>{selectedDevice?.name??"나의 기기"}</h2><p>{selectedDevice?`${devicePresence} · 게임과 독서를 하나의 공간에서`:"휴대폰을 등록하고 원격 화면을 시작하세요."}</p></div><button type="button" onClick={openPairing}>+ 새 기기 등록</button></div>
+      <div className="workspace-title"><div><p className="eyebrow">REMOTE WORKSPACE</p><h2>{selectedDevice?.name??"나의 기기"}</h2><p>{selectedDevice?`${devicePresence} · 게임과 독서를 하나의 공간에서`:"휴대폰을 등록하고 원격 화면을 시작하세요."}</p></div><button type="button" onClick={openPairing}><UiIcon name="plus" size={16}/>새 기기 등록</button></div>
       <section className={`console-grid ${inspectorOpen?'':'inspector-collapsed'}`} aria-label="원격 조작 화면">
         <article className={`screen-card interaction-view mode-${interaction.profile.mode} ${interaction.profile.mode!=="game"&&interaction.profile.minimal?"reading-minimal":""} ${interaction.status.idle?"reading-idle":""}`} ref={viewerRef}>
 
           <div className="card-heading">
             <div className="player-title"><span className={`live-badge ${connected?"active":""}`}>{phaseLabel}</span><span>{metrics.fps===null?"FPS 확인 불가":`${metrics.fps} fps`}</span></div>
-            <div className="interaction-mode-tabs" role="group" aria-label="빠른 모드 전환">{([['game','게임'],['novel','소설'],['webtoon','웹툰']] as const).map(([mode,label])=><button type="button" key={mode} aria-pressed={interaction.profile.mode===mode} onClick={()=>interaction.selectMode(mode)}>{label}</button>)}</div>
+
             <div className="screen-heading-actions">
               <select
                 className="device-select"
@@ -1358,7 +1383,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               )}
             </div>
           </div>
-          <div className="screen-help"><span aria-hidden="true">ⓘ</span>실시간 드래그는 휴대폰 앱 v0.5.3 이상에서 사용할 수 있어요. 클릭·휠·방향키도 지원합니다. 일부 보안·DRM 앱은 Android 정책상 화면이 검게 표시될 수 있습니다.</div>
+          <div className="android-navigation" role="group" aria-label="Android 탐색"><button type="button" disabled={!connected} aria-label="Android 뒤로" onClick={()=>sendCommand("back","뒤로")}><UiIcon name="back"/></button><button type="button" disabled={!connected} aria-label="Android 홈" onClick={()=>sendCommand("home","홈")}><UiIcon name="home"/></button><button type="button" disabled={!connected} aria-label="Android 최근 앱" onClick={()=>sendCommand("recents","최근")}><UiIcon name="recents"/></button><button type="button" aria-label="화면 확대" onClick={()=>interaction.update({zoom:Math.min(3,interaction.profile.zoom+.25)})}><UiIcon name="zoom"/></button></div>
+          <div className="screen-help"><UiIcon name="info" size={17}/>실시간 드래그는 휴대폰 앱 v0.5.3 이상에서 사용할 수 있어요. 클릭·휠·방향키도 지원합니다. 일부 보안·DRM 앱은 Android 정책상 화면이 검게 표시될 수 있습니다.</div>
         </article>
 
         {detachedWindow && createPortal(
@@ -1411,6 +1437,67 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         )}
 
         <aside id="player-inspector" className="control-rail" aria-label="원격 제어 도구" hidden={!inspectorOpen}>
+          <div className="interaction-mode-tabs rail-mode-tabs" role="group" aria-label="빠른 모드 전환">{([['game','게임'],['novel','소설'],['webtoon','웹툰']] as const).map(([mode,label])=><button type="button" key={mode} aria-pressed={interaction.profile.mode===mode} onClick={()=>interaction.selectMode(mode)}>{label}</button>)}</div>
+          <section className={`control-card connect-card ${connected ? "is-connected" : ""}`}>
+            <p className="eyebrow">CONNECTION</p><h2>{phaseLabel}</h2>
+            {deviceLoadError&&<div role="alert"><p>{deviceLoadError}</p><button type="button" onClick={()=>void loadDevices()}>기기 목록 다시 시도</button></div>}
+            <p>{connectionError ?? connectionHint ?? (waiting ? "휴대폰 응답을 기다리고 있어요." : connected ? "암호화된 연결을 사용하고 있어요." : selectedDevice ? "자동 연결 준비 상태이면 바로 연결됩니다. 그 외에는 휴대폰에서 승인해 주세요." : "먼저 휴대폰을 등록해 주세요.")}</p>
+            <button className="primary-action" type="button" onClick={() => { if (selectedDevice) void beginConnection(); else openPairing(); }} aria-busy={waiting || connection === "reconnecting"}>
+              {waiting || connection === "reconnecting" ? <><span className="spinner" /> {connection === "reconnecting" ? "재연결 중 · 다시 시도" : "승인 대기 · 다시 시도"}</> : connected ? "연결 새로고침" : selectedDevice ? (connectionError ? "재연결" : "연결 시작") : "기기 등록"}
+            </button>
+            <div className="device-row">
+              <span className={`status-dot ${online ? "online" : ""}`} /><strong>{selectedDevice?.name ?? "등록된 기기 없음"}</strong>
+              <span>{selectedDevice ? `${devicePresence}${Number.isFinite(selectedDevice.batteryLevel) ? ` · ${selectedDevice.batteryLevel}%` : " · 배터리 확인 불가"}` : "미등록"}</span>
+            </div>
+          </section>
+
+          {!selectedDevice && <section className="control-card setup-guide"><h3>처음 연결하나요?</h3><ol><li><strong>휴대폰에 앱 설치</strong><p>‘기기 등록’에서 설치 및 권한 안내를 확인하세요.</p></li><li><strong>6자리 코드 입력</strong><p>휴대폰 앱에 웹에서 만든 코드를 입력하세요.</p></li><li><strong>연결 준비</strong><p>앱에서 조작 권한과 연결 요청 알림을 켜세요. 원격 키보드는 선택 사항입니다.</p></li></ol></section>}
+          {selectedDevice && <>
+          <section className="control-card quick-card">
+            <div className="section-title-row"><h3>빠른 제어</h3><span>{connected ? "사용 가능" : "연결 후 사용"}</span></div>
+            <div className="quick-grid">
+              {controls.map((control) => <button key={control.command} type="button" disabled={!connected} onClick={() => sendCommand(control.command, control.label)}><UiIcon name={control.icon as UiIconName}/>{control.label}</button>)}
+            </div>
+            <details className="install-help"><summary>키보드 단축키</summary>
+              <div className="shortcut-lines">
+                <div>최근 앱 : <kbd>Alt + R</kbd></div>
+                <div>홈 : <kbd>Alt + H</kbd></div>
+                <div>뒤로가기 : <kbd>Alt + B</kbd></div>
+              </div>
+              <p>연결 중인 사이트·분리 창에서 사용합니다.<br />일반 입력란과 설정창에서는 작동하지 않습니다.</p>
+            </details>
+          </section>
+
+          <section className="control-card connection-overview" aria-label="연결 상태 요약"><div className="section-title-row"><h3>연결 상태</h3><UiIcon name="stats" size={18}/></div><div className="summary-metrics"><div><small>네트워크 RTT</small><strong>{connected&&metrics.latency!==null?`${metrics.latency} ms`:"확인 불가"}</strong></div><div><small>해상도</small><strong>{connected&&metrics.width&&metrics.height?`${metrics.width} × ${metrics.height}`:"확인 불가"}</strong></div><div><small>수신 FPS</small><strong>{connected&&metrics.fps!==null?`${metrics.fps} fps`:"확인 불가"}</strong></div></div><p>코덱 {metrics.codec??"확인 불가"} · 배터리 {Number.isFinite(selectedDevice?.batteryLevel)?`${selectedDevice?.batteryLevel}%`:"확인 불가"}</p></section>
+          <RemoteTools key={toolsClient?.id ?? "offline"} client={toolsClient} diagnostics={diagnostics} />
+
+          <section className="control-card volume-card">
+            <div className="volume-label"><strong>볼륨 설정</strong><UiIcon name="audio" size={18}/></div>
+            <button type="button" disabled={!connected} aria-label="볼륨 낮추기" onClick={() => changeVolume(volume - 5)}>−</button>
+            <input type="range" min="0" max="100" value={volume} disabled={!connected} aria-label="휴대폰 볼륨 설정" aria-valuetext={connected && volumeKnown ? `${volume}%` : "아직 볼륨을 설정하지 않음"} onChange={(event) => changeVolume(Number(event.target.value))} style={{ "--volume": `${volume}%` } as React.CSSProperties} />
+            <output>{connected && volumeKnown ? `${volume}%` : "확인 불가"}</output><button type="button" disabled={!connected} aria-label="볼륨 높이기" onClick={() => changeVolume(volume + 5)}>+</button>
+          </section>
+
+          {connected && <details className="control-card connection-details"><summary>스트리밍 통계</summary>          <div className="metrics-card" aria-label="연결 정보">
+            <div className="metric"><span className="metric-icon">↔</span><small>경로</small><strong>{connected ? metrics.path === "turn" ? "중계" : metrics.path === "direct" ? "직접" : "확인 불가" : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">▮▮▮</span><small>네트워크 RTT</small><strong>{connected && metrics.latency !== null ? `${metrics.latency} ms` : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">HD</span><small>해상도</small><strong>{connected && metrics.width && metrics.height ? `${metrics.width}×${metrics.height}` : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">▶</span><small>프레임</small><strong>{connected && metrics.fps !== null ? `${metrics.fps} fps` : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">⇣</span><small>비트레이트</small><strong>{connected && metrics.bitrateKbps !== null ? `${metrics.bitrateKbps} kbps` : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">%</span><small>손실</small><strong>{connected && metrics.packetLoss !== null ? `${metrics.packetLoss}%` : "확인 불가"}</strong></div>
+          </div>
+
+            <p>RTT는 입력부터 화면 표시까지의 종단 지연이 아닙니다. 종단 지연: 미측정.</p>
+            <p>코덱: {metrics.codec ?? "확인 불가"} · 디코딩: {metrics.decodeMs === null ? "확인 불가" : `${metrics.decodeMs.toFixed(1)} ms/프레임`} · 지터 버퍼: {metrics.jitterMs === null ? "확인 불가" : `${metrics.jitterMs.toFixed(1)} ms`}</p>
+            <p>구간 드롭: {metrics.dropped ?? "확인 불가"} · {metrics.stalled ? "새 프레임 없음 (정지 화면일 수도 있음)" : metrics.fps===null?"새 프레임 상태 확인 불가":"프레임 정지 미감지"} · 입력 전송 대기: {metrics.bufferedBytes} bytes</p>
+            <p>Android 캡처/송신 FPS: {senderMetrics?.captureFps?.toFixed(1) ?? "확인 불가"} / {senderMetrics?.sendFps?.toFixed(1) ?? "확인 불가"} · 송신: {senderMetrics?.sendKbps?.toFixed(0) ?? "확인 불가"} kbps</p>
+            <p>인코딩: {senderMetrics?.encodeMs?.toFixed(1) ?? "확인 불가"} ms/프레임 · 인코더: {senderMetrics?.encoder ?? "확인 불가"} · 전력 효율 인코더 지표: {senderMetrics?.hardwareEncoder === null || !senderMetrics ? "확인 불가" : String(senderMetrics.hardwareEncoder)}</p>
+            <p>적용 제한: {senderMetrics?.configuredEdge && senderMetrics?.configuredFps ? `${senderMetrics.configuredEdge}p/${senderMetrics.configuredFps}fps` : "확인 불가"} · RTP 제한 수락: {senderMetrics?.rtpLimitsApplied === null || !senderMetrics ? "확인 불가" : String(senderMetrics.rtpLimitsApplied)} · 열 상태: {senderMetrics?.thermal ?? "확인 불가"} · 품질 모드: {qualityMode === "auto" ? "자동" : "수동 (기기 안전 제한은 적용)"}</p>
+
+</details>}
+          <button className="disconnect-button" type="button" disabled={!connected && !waiting && connection!=="reconnecting"} onClick={() => setDialog("disconnect")}>연결 해제</button>
+          </>}
+
           <details className="control-card inspector-section" open><summary>조작 및 프로필</summary><InteractionControls control={interaction} personal={pcMode==="personal"} connected={connected} focusViewer={focusInteractionViewer}/></details>
           <section className="control-card quality-card">              <details className="display-settings"><summary>화질 및 화면</summary><div className="display-settings-panel">
               <label>품질 모드<select aria-label="영상 품질 모드" value={qualityMode} onChange={event => {
@@ -1459,64 +1546,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 <option value={75}>투명도 75%</option>
                 <option value={100}>투명도 100%</option>
               </select></label></div></details></section>
-          <section className="control-card connect-card">
-            <p className="eyebrow">CONNECTION</p><h2>{phaseLabel}</h2>
-            {deviceLoadError&&<div role="alert"><p>{deviceLoadError}</p><button type="button" onClick={()=>void loadDevices()}>기기 목록 다시 시도</button></div>}
-            <p>{connectionError ?? connectionHint ?? (waiting ? "휴대폰 응답을 기다리고 있어요." : connected ? "암호화된 연결을 사용하고 있어요." : selectedDevice ? "자동 연결 준비 상태이면 바로 연결됩니다. 그 외에는 휴대폰에서 승인해 주세요." : "먼저 휴대폰을 등록해 주세요.")}</p>
-            <button className="primary-action" type="button" onClick={() => { if (selectedDevice) void beginConnection(); else openPairing(); }} aria-busy={waiting || connection === "reconnecting"}>
-              {waiting || connection === "reconnecting" ? <><span className="spinner" /> {connection === "reconnecting" ? "재연결 중 · 다시 시도" : "승인 대기 · 다시 시도"}</> : connected ? "연결 새로고침" : selectedDevice ? (connectionError ? "재연결" : "연결 시작") : "기기 등록"}
-            </button>
-            <div className="device-row">
-              <span className={`status-dot ${online ? "online" : ""}`} /><strong>{selectedDevice?.name ?? "등록된 기기 없음"}</strong>
-              <span>{selectedDevice ? `${devicePresence}${Number.isFinite(selectedDevice.batteryLevel) ? ` · ${selectedDevice.batteryLevel}%` : " · 배터리 확인 불가"}` : "미등록"}</span>
-            </div>
-          </section>
 
-          {!selectedDevice && <section className="control-card setup-guide"><h3>처음 연결하나요?</h3><ol><li><strong>휴대폰에 앱 설치</strong><p>‘기기 등록’에서 설치 및 권한 안내를 확인하세요.</p></li><li><strong>6자리 코드 입력</strong><p>휴대폰 앱에 웹에서 만든 코드를 입력하세요.</p></li><li><strong>연결 준비</strong><p>앱에서 조작 권한과 연결 요청 알림을 켜세요. 원격 키보드는 선택 사항입니다.</p></li></ol></section>}
-          {selectedDevice && <>
-          <section className="control-card quick-card">
-            <div className="section-title-row"><h3>빠른 제어</h3><span>{connected ? "사용 가능" : "연결 후 사용"}</span></div>
-            <div className="quick-grid">
-              {controls.map((control) => <button key={control.command} type="button" disabled={!connected} onClick={() => sendCommand(control.command, control.label)}><span aria-hidden="true">{control.icon}</span>{control.label}</button>)}
-            </div>
-            <details className="install-help"><summary>키보드 단축키</summary>
-              <div className="shortcut-lines">
-                <div>최근 앱 : <kbd>Alt + R</kbd></div>
-                <div>홈 : <kbd>Alt + H</kbd></div>
-                <div>뒤로가기 : <kbd>Alt + B</kbd></div>
-              </div>
-              <p>연결 중인 사이트·분리 창에서 사용합니다.<br />일반 입력란과 설정창에서는 작동하지 않습니다.</p>
-            </details>
-          </section>
-
-          <RemoteTools key={toolsClient?.id ?? "offline"} client={toolsClient} diagnostics={diagnostics} />
-
-          <section className="control-card volume-card">
-            <div className="volume-label"><strong>볼륨 설정</strong><span aria-hidden="true">◖))</span></div>
-            <button type="button" disabled={!connected} aria-label="볼륨 낮추기" onClick={() => changeVolume(volume - 5)}>−</button>
-            <input type="range" min="0" max="100" value={volume} disabled={!connected} aria-label="휴대폰 볼륨 설정" aria-valuetext={connected && volumeKnown ? `${volume}%` : "아직 볼륨을 설정하지 않음"} onChange={(event) => changeVolume(Number(event.target.value))} style={{ "--volume": `${volume}%` } as React.CSSProperties} />
-            <output>{connected && volumeKnown ? `${volume}%` : "확인 불가"}</output><button type="button" disabled={!connected} aria-label="볼륨 높이기" onClick={() => changeVolume(volume + 5)}>+</button>
-          </section>
-
-          {connected && <details className="control-card connection-details"><summary>스트리밍 통계</summary>          <div className="metrics-card" aria-label="연결 정보">
-            <div className="metric"><span className="metric-icon">↔</span><small>경로</small><strong>{connected ? metrics.path === "turn" ? "중계" : metrics.path === "direct" ? "직접" : "확인 불가" : "확인 불가"}</strong></div>
-            <div className="metric"><span className="metric-icon">▮▮▮</span><small>네트워크 RTT</small><strong>{connected && metrics.latency !== null ? `${metrics.latency} ms` : "확인 불가"}</strong></div>
-            <div className="metric"><span className="metric-icon">HD</span><small>해상도</small><strong>{connected && metrics.width && metrics.height ? `${metrics.width}×${metrics.height}` : "확인 불가"}</strong></div>
-            <div className="metric"><span className="metric-icon">▶</span><small>프레임</small><strong>{connected && metrics.fps !== null ? `${metrics.fps} fps` : "확인 불가"}</strong></div>
-            <div className="metric"><span className="metric-icon">⇣</span><small>비트레이트</small><strong>{connected && metrics.bitrateKbps !== null ? `${metrics.bitrateKbps} kbps` : "확인 불가"}</strong></div>
-            <div className="metric"><span className="metric-icon">%</span><small>손실</small><strong>{connected && metrics.packetLoss !== null ? `${metrics.packetLoss}%` : "확인 불가"}</strong></div>
-          </div>
-
-            <p>RTT는 입력부터 화면 표시까지의 종단 지연이 아닙니다. 종단 지연: 미측정.</p>
-            <p>코덱: {metrics.codec ?? "확인 불가"} · 디코딩: {metrics.decodeMs === null ? "확인 불가" : `${metrics.decodeMs.toFixed(1)} ms/프레임`} · 지터 버퍼: {metrics.jitterMs === null ? "확인 불가" : `${metrics.jitterMs.toFixed(1)} ms`}</p>
-            <p>구간 드롭: {metrics.dropped ?? "확인 불가"} · {metrics.stalled ? "새 프레임 없음 (정지 화면일 수도 있음)" : metrics.fps===null?"새 프레임 상태 확인 불가":"프레임 정지 미감지"} · 입력 전송 대기: {metrics.bufferedBytes} bytes</p>
-            <p>Android 캡처/송신 FPS: {senderMetrics?.captureFps?.toFixed(1) ?? "확인 불가"} / {senderMetrics?.sendFps?.toFixed(1) ?? "확인 불가"} · 송신: {senderMetrics?.sendKbps?.toFixed(0) ?? "확인 불가"} kbps</p>
-            <p>인코딩: {senderMetrics?.encodeMs?.toFixed(1) ?? "확인 불가"} ms/프레임 · 인코더: {senderMetrics?.encoder ?? "확인 불가"} · 전력 효율 인코더 지표: {senderMetrics?.hardwareEncoder === null || !senderMetrics ? "확인 불가" : String(senderMetrics.hardwareEncoder)}</p>
-            <p>적용 제한: {senderMetrics?.configuredEdge && senderMetrics?.configuredFps ? `${senderMetrics.configuredEdge}p/${senderMetrics.configuredFps}fps` : "확인 불가"} · RTP 제한 수락: {senderMetrics?.rtpLimitsApplied === null || !senderMetrics ? "확인 불가" : String(senderMetrics.rtpLimitsApplied)} · 열 상태: {senderMetrics?.thermal ?? "확인 불가"} · 품질 모드: {qualityMode === "auto" ? "자동" : "수동 (기기 안전 제한은 적용)"}</p>
-
-</details>}
-          <button className="disconnect-button" type="button" disabled={!connected && !waiting && connection!=="reconnecting"} onClick={() => setDialog("disconnect")}>연결 해제</button>
-          </>}
           <details className="control-card safety-info"><summary>화면 OFF 실험 · 미검증</summary>
             <p>웹에서는 화면 OFF를 실행하지 않습니다. 물리 패널 OFF·캡처 유지·복구는 갤럭시 실기기에서 미검증입니다.</p>
             <dl><dt>Shizuku 실행/승인</dt><dd>웹에서 확인 불가</dd><dt>디스플레이 지원/패널 상태</dt><dd>웹에서 확인 불가</dd><dt>시험/자동 복구 결과</dt><dd>미검증</dd></dl>
@@ -1524,14 +1554,14 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             <p>복구 경로가 검증되지 않았으면 시험하지 마세요. MediaProjection 중단, 잠금, 앱 강제 종료 시 외부 복구가 필요할 수 있습니다. 웹의 ‘잠금’은 패널 OFF 실험과 다릅니다.</p>
           </details>
           <details className="control-card"><summary>연결 도움말</summary><p>휴대폰에서 접근성 조작 권한·화면 공유·알림을 확인하세요. 앱과 PC의 네트워크를 확인한 뒤 다시 연결하세요.</p><p>직접 연결이 차단되고 TURN이 설정되지 않았다면 다른 네트워크에서 시도하세요. 이 사이트는 유료 중계를 자동으로 추가하지 않습니다.</p><button type="button" onClick={()=>setDialog("settings")}>기기 관리 열기</button></details>
-          <section className="privacy-note"><span className="shield" aria-hidden="true">◇</span><div><strong>휴대폰에서 허용한 동안만 연결해요</strong><p>일반 연결은 휴대폰에서 승인합니다. 앱에서 자동 연결을 준비한 동안에는 추가 승인 없이 연결됩니다. 영상과 키 입력은 서버에 저장하지 않습니다.</p></div></section>
+          <section className="privacy-note"><span className="shield"><UiIcon name="shield"/></span><div><strong>휴대폰에서 허용한 동안만 연결해요</strong><p>일반 연결은 휴대폰에서 승인합니다. 앱에서 자동 연결을 준비한 동안에는 추가 승인 없이 연결됩니다. 영상과 키 입력은 서버에 저장하지 않습니다.</p></div></section>
         </aside>
       </section>
 
       {dialog === "pair" && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setDialog(null)}>
           <section ref={modalRef} tabIndex={-1} className="modal" role="dialog" aria-modal="true" aria-labelledby="pair-title" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="modal-close" type="button" aria-label="닫기" onClick={() => setDialog(null)}>×</button>
+            <button className="modal-close" type="button" aria-label="닫기" onClick={() => setDialog(null)}><UiIcon name="close"/></button>
             <p className="eyebrow">DEVICE PAIRING</p><h2 id="pair-title">갤럭시를 등록해 주세요</h2>
             <p>린로 앱을 연 다음 아래 6자리 코드를 입력하면 이 계정에 안전하게 등록됩니다.</p>
             <h3>1. 휴대폰에 앱 설치</h3>
@@ -1559,18 +1589,18 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           </section>
         </div>
       )}
-      {dialog === "settings" && (
+      {(dialog === "settings" || dialog === "devices") && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setDialog(null)}>
           <section ref={modalRef} tabIndex={-1} className="modal compact" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="modal-close" type="button" aria-label="닫기" onClick={() => setDialog(null)}>×</button>
-            <p className="eyebrow">DEVICE SECURITY</p><h2 id="settings-title">설정</h2><h3>PC 사용 환경</h3>
+            <button className="modal-close" type="button" aria-label="닫기" onClick={() => setDialog(null)}><UiIcon name="close"/></button>
+            <p className="eyebrow">YOUR LINRO</p><h2 id="settings-title">{dialog === "devices" ? "내 기기" : "설정"}</h2>{dialog === "settings" && <><h3>PC 사용 환경</h3>
             <p>이 PC의 사용 환경을 선택하세요. 공용 PC 모드는 화면 설정을 저장하지 않습니다. 자리를 떠나기 전 ‘사용 종료’를 눌러 로그아웃해 주세요.</p>
             <div className="pc-mode-picker" role="group" aria-label="PC 사용 모드">
               <button type="button" aria-pressed={pcMode === "personal"} className={pcMode === "personal" ? "active" : ""} onClick={() => changePcMode("personal")}><strong>개인 PC</strong><small>화면 설정 기억</small></button>
               <button type="button" aria-pressed={pcMode === "public"} className={pcMode === "public" ? "active" : ""} onClick={() => changePcMode("public")}><strong>공용 PC</strong><small>설정 저장 안 함</small></button>
             </div>
             {pcMode === "public" && <button className="public-session-end" type="button" onClick={() => void endPublicSession()}>공용 PC 사용 종료</button>}
-            <TestConnectionInfo/><h3>등록 기기</h3><p>등록 해제한 휴대폰은 새 코드로 다시 등록해야 연결할 수 있습니다.</p>
+            <TestConnectionInfo/></>}<h3>등록 기기</h3><p>등록 해제한 휴대폰은 새 코드로 다시 등록해야 연결할 수 있습니다.</p>
             <div className="registered-device-list">
               {devices.length ? devices.map((device) => (
                 <div className="registered-device" key={device.id}>
@@ -1580,7 +1610,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 </div>
               )) : <div className="empty-device-list">등록된 기기가 없습니다.</div>}
             </div>
-            <p className="install-warning">린로 시험 APK는 개발 검증용입니다. 기존 앱을 삭제하지 말고 서명이 일치하는지 확인하세요.</p>
+            <button type="button" className="primary-action" onClick={openPairing}>새 기기 등록하기</button><p className="install-warning">린로 시험 APK는 개발 검증용입니다. 기존 앱을 삭제하지 말고 서명이 일치하는지 확인하세요.</p>
           </section>
         </div>
       )}

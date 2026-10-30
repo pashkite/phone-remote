@@ -14,7 +14,7 @@ await page.route('**/api/**',route=>{
  if(url.pathname==='/api/devices')return route.fulfill({json:{devices:state.noDevices?[]:[{id:'test-device',name:'Browser test phone',appVersion:'0.5.3',online:state.offline?false:true,lastSeenAt:state.unknownPresence?null:Date.now(),screenWidth:1080,screenHeight:2400}]}});
  if(url.pathname==='/api/pairing/start')return route.fulfill(state.pairError?{status:500,json:{error:'등록 코드 생성 실패: 다시 시도하세요.'}}:{json:{code:'123456',expiresAt:Date.now()+(state.expired?-1000:600000)}});
  if(url.pathname==='/api/build-info'&&state.buildHtml)return route.fulfill({contentType:'text/html',body:'<html>old site</html>'});
- if(url.pathname==='/api/build-info')return route.fulfill({json:{brand:'린로',englishName:'Linro',buildId:state.buildMismatch?'old-build':'linro-device-test-stage7',protocolVersion:1,signalingOrigin:url.origin,physicalDeviceVerified:false}});
+ if(url.pathname==='/api/build-info')return route.fulfill({json:{brand:'린로',englishName:'Linro',buildId:state.buildMismatch?'old-build':'linro-reference-ui-stage7-5',protocolVersion:1,signalingOrigin:url.origin,physicalDeviceVerified:false}});
  if(url.pathname==='/api/ice')return route.fulfill({json:{iceServers:[]}});
  if(url.pathname==='/api/sessions')return route.fulfill({status:201,json:{sessionId:sid}});
  if(url.pathname===`/api/sessions/${sid}`&&route.request().method()==='GET')return route.fulfill({json:{session:{state:state.sessionState??'answer_ready',answerType:state.sessionState&&state.sessionState!=='answer_ready'?null:'answer',answerSdp:state.sessionState&&state.sessionState!=='answer_ready'?null:'test-only'},candidates:[]}});

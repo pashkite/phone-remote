@@ -76,5 +76,5 @@ test('Linro build identity is owner-authenticated, read-only and contains no cre
  assert.equal((await call('buildInfo',{method:'GET',user:null})).status,401);
  assert.equal((await call('buildInfo',{method:'GET',user:'other@local.test'})).status,401);
  const response=await call('buildInfo',{method:'GET'});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
- const body=await response.json();assert.equal(body.brand,'린로');assert.equal(body.englishName,'Linro');assert.equal(body.buildId,'linro-device-test-stage7');assert.equal(body.signalingOrigin,'https://qa.local');assert.equal(body.protocolVersion,1);assert.equal(body.physicalDeviceVerified,false);assert.doesNotMatch(JSON.stringify(body),/deviceToken|tokenHash|Bearer/);
+ const body=await response.json();assert.equal(body.brand,'린로');assert.equal(body.englishName,'Linro');assert.equal(body.buildId,'linro-reference-ui-stage7-5');assert.equal(body.signalingOrigin,'https://qa.local');assert.equal(body.protocolVersion,1);assert.equal(body.physicalDeviceVerified,false);assert.doesNotMatch(JSON.stringify(body),/deviceToken|tokenHash|Bearer/);
 });

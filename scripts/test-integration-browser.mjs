@@ -15,7 +15,7 @@ await scenario('cancel during delayed session response cannot resurrect a peer',
 });
 await scenario('selecting another device closes the previous device control',async f=>{
  const {page}=f;await page.route('**/api/devices',route=>route.fulfill({json:{devices:['test-device','second-device'].map(id=>({id,name:id,appVersion:'0.5.3',online:true,lastSeenAt:Date.now()}))}}));
- await connected(f);await page.getByLabel('원격 기기 선택').selectOption('second-device');await page.waitForTimeout(150);
+ await connected(f);await page.getByRole('button',{name:'second-device',exact:false}).click();await page.waitForTimeout(150);
  assert.equal(await page.evaluate(()=>window.__peer.connectionState),'closed');assert.equal(await page.locator('.phone-view.is-live').count(),0);
 });
 await scenario('authentication expiry terminates open control and prevents reconnect',async f=>{

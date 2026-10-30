@@ -23,13 +23,13 @@ try {
  });
  await screenshot('01-devices-1400-dark');
  await check('pairing error, retry, expiry, keyboard focus trap and Escape return',async()=>{
-  state.pairError=true;await page.getByRole('button',{name:'+ 새 기기 등록'}).click();const dialog=page.getByRole('dialog');
+  state.pairError=true;await page.getByRole('button',{name:'기기 추가',exact:true}).click();const dialog=page.getByRole('dialog');
   await dialog.getByRole('alert').waitFor();await screenshot('02-pair-error');
   state.pairError=false;state.expired=true;await dialog.getByRole('button',{name:'새 코드',exact:true}).click();await dialog.getByText('코드가 만료되었습니다.',{exact:false}).waitFor();
   state.expired=false;await dialog.getByRole('button',{name:'새 코드',exact:true}).click();await dialog.getByText('123 456').waitFor();
   await dialog.getByRole('button',{name:'닫기',exact:true}).focus();await page.keyboard.press('Shift+Tab');assert.equal(await page.evaluate(()=>document.activeElement.textContent),'등록됐는지 확인');
   await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('aria-label')),'닫기');
-  await screenshot('03-pair-code');await page.keyboard.press('Escape');assert.equal(await dialog.count(),0);assert.match(await page.evaluate(()=>document.activeElement.textContent),/새 기기 등록/);
+  await screenshot('03-pair-code');await page.keyboard.press('Escape');assert.equal(await dialog.count(),0);assert.match(await page.evaluate(()=>document.activeElement.textContent),/기기 추가/);
  });
  await check('request / response / consent / negotiation and no premature connected state',async()=>{
   state.sessionState='requested';await page.getByRole('button',{name:'연결 시작',exact:true}).first().click();await page.locator('.connection-pill').filter({hasText:'기기 응답 대기'}).waitFor();

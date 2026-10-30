@@ -1,9 +1,10 @@
 import Image from "next/image";
 import ThemeToggle from "./components/theme-toggle";
+import UiIcon from "./components/ui-icon";
 
 export default function PublicConsole({ signInPath }: { signInPath: string }) {
   return (
-    <main className="remote-shell">
+    <main className="remote-shell guest-shell">
       <header className="topbar">
         <div className="brand-lockup">
           <Image unoptimized className="brand-symbol" src="/brand/symbol.svg" width="32" height="32" alt="" />
@@ -11,10 +12,11 @@ export default function PublicConsole({ signInPath }: { signInPath: string }) {
         </div>
         <div className="owner-area"><ThemeToggle /><a className="guest-login" href={signInPath} target="_top">로그인</a></div>
       </header>
+      <div className="guest-intro"><p className="eyebrow">LINK ROAD</p><h2>당신의 기기를, 더 가까이</h2><p>게임의 순간부터 조용한 독서까지. 내 갤럭시의 화면을 PC 브라우저에서 이어가세요.</p></div>
       <section className="console-grid" aria-label="린로 시작 화면">
         <article className="screen-card">
           <div className="card-heading">
-            <div><p className="eyebrow">GALAXY REMOTE</p><h2>휴대폰 화면</h2></div>
+            <div><p className="eyebrow">YOUR GALAXY, CONNECTED</p><h2>휴대폰 화면</h2></div>
           </div>
           <div className="screen-stage">
             <div className="phone-view">
@@ -39,7 +41,7 @@ export default function PublicConsole({ signInPath }: { signInPath: string }) {
             <p className="guest-description">린로 앱을 설치한 뒤, 로그인한 PC에서 등록 코드를 만들면 연결할 수 있어요.</p>
             <p className="install-warning">린로 시험 APK는 개발 검증용입니다. 기존 앱을 삭제하지 말고 서명이 일치하는지 확인하세요.</p>
           </section>
-          <section className="privacy-note"><span className="shield" aria-hidden="true">◇</span><div><strong>소유자만 연결할 수 있어요</strong><p>등록 기기와 연결 정보는 로그인한 소유자에게만 표시됩니다. 휴대폰에서 허용한 동안만 화면을 공유하고 조작할 수 있어요.</p></div></section>
+          <section className="privacy-note"><span className="shield"><UiIcon name="shield"/></span><div><strong>소유자만 연결할 수 있어요</strong><p>등록 기기와 연결 정보는 로그인한 소유자에게만 표시됩니다. 휴대폰에서 허용한 동안만 화면을 공유하고 조작할 수 있어요.</p></div></section>
         </aside>
       </section>
     </main>

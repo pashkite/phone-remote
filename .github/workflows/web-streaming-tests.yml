@@ -68,6 +68,7 @@ jobs:
           QA_SOAK_SECONDS=300 node scripts/test-integration-browser.mjs
           node scripts/test-network-browser.mjs
           node scripts/test-linro-preparation-browser.mjs
+          node scripts/test-reference-ui-browser.mjs
           node scripts/test-webrtc-loopback-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
@@ -77,5 +78,6 @@ jobs:
             outputs/integration-qa/
             outputs/ux-branding/after/
             outputs/linro-stage7/
+            outputs/reference-ui/
             /tmp/galaxy-browser-dev.log
           retention-days: 7

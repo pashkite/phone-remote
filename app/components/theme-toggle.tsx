@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import UiIcon from "./ui-icon";
 export default function ThemeToggle() {
   const [theme, setTheme] = useState("dark");
   useEffect(() => {
@@ -17,5 +18,5 @@ export default function ThemeToggle() {
     document.documentElement.dataset.theme = next;
     setTheme(next);
     try { localStorage.setItem("gr_pref_theme", next); } catch { /* Storage is optional. */ }
-  }}>{theme === "dark" ? "☀" : "☾"}</button>;
+  }}><UiIcon name={theme === "dark" ? "sun" : "moon"} /></button>;
 }
