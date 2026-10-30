@@ -19,7 +19,7 @@
     "version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_3a51f06b9790819190b1b5ac261c76aa",
     "previous_version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_1e0f943ff7408191afd4f821d2857c87",
     "previous_deployment_id": "appgdep_6acf5ed69de48191931c07f560bc41ec",
-    "phase": "validated_saved_candidate",
+    "phase": "publishing_requested",
     "validation": {
       "build": "passed",
       "typescript": "passed",
@@ -32,7 +32,9 @@
       "web_source_sha256": "810334b87e399cb719c73bfe10971a8e41f180d3a6c9ed7c695645238e2c8218",
       "unverified": [
         "signed-in production browser flow",
-        "physical Android/WebRTC"
+        "physical Android/WebRTC",
+        "production POST/device authorization smoke test",
+        "production forged identity-header test"
       ]
     }
   },
