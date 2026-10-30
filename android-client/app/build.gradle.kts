@@ -10,7 +10,7 @@ val signalingBaseUrl = providers.gradleProperty("signalingBaseUrl")
 require(signalingBaseUrl in setOf(
     "https://galaxy-remote-control.ashkite.chatgpt.site",
     "https://remote.ashkite.kro.kr",
-)) { "Use a verified Galaxy Remote HTTPS origin." }
+)) { "Use an already approved HTTPS signaling origin; new QA origins require review." }
 
 android {
     namespace = "com.galaxyremote.app"
@@ -20,8 +20,9 @@ android {
         applicationId = "com.galaxyremote.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
+        versionCode = 18
         versionName = "0.5.3"
+        buildConfigField("String", "DEVICE_TEST_BUILD_ID", "\"linro-device-test-stage7\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField(

@@ -71,3 +71,10 @@ test('changing the configured owner revokes old-owner device polling and live le
  const auth={user:null,deviceId:'revoked-owner',token:'token-revoked-owner',body:{sessionId:'revoked-owner-session'}};
  assert.equal((await call('lease',auth)).status,401);assert.equal((await call('heartbeat',{...auth,body:{}})).status,401);
 });
+
+test('Linro build identity is owner-authenticated, read-only and contains no credentials',async()=>{
+ assert.equal((await call('buildInfo',{method:'GET',user:null})).status,401);
+ assert.equal((await call('buildInfo',{method:'GET',user:'other@local.test'})).status,401);
+ const response=await call('buildInfo',{method:'GET'});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
+ const body=await response.json();assert.equal(body.brand,'린로');assert.equal(body.englishName,'Linro');assert.equal(body.buildId,'linro-device-test-stage7');assert.equal(body.signalingOrigin,'https://qa.local');assert.equal(body.protocolVersion,1);assert.equal(body.physicalDeviceVerified,false);assert.doesNotMatch(JSON.stringify(body),/deviceToken|tokenHash|Bearer/);
+});

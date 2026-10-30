@@ -13,7 +13,7 @@ export async function apiHarness(){
  for(const file of ['0000_parallel_morlocks.sql','0001_shallow_hulk.sql','0002_dear_bastion.sql']){
   const sql=await readFile(path.join(root,'drizzle',file),'utf8');for(const statement of sql.split('--> statement-breakpoint'))if(statement.trim())await db.prepare(statement).run();
  }
- const names={devices:'devices',removeDevice:'devices/[id]',createSession:'sessions',session:'sessions/[id]',offer:'sessions/[id]/offer',candidate:'sessions/[id]/candidate',pairStart:'pairing/start',pairComplete:'pairing/complete',deviceSession:'device/session',decision:'device/decision',answer:'device/answer',deviceCandidate:'device/candidate',lease:'device/lease',heartbeat:'device/heartbeat'};
+ const names={buildInfo:'build-info',devices:'devices',removeDevice:'devices/[id]',createSession:'sessions',session:'sessions/[id]',offer:'sessions/[id]/offer',candidate:'sessions/[id]/candidate',pairStart:'pairing/start',pairComplete:'pairing/complete',deviceSession:'device/session',decision:'device/decision',answer:'device/answer',deviceCandidate:'device/candidate',lease:'device/lease',heartbeat:'device/heartbeat'};
  const contents=Object.entries(names).map(([name,p])=>`export * as ${name} from ${JSON.stringify(path.join(root,'app/api',p,'route.ts'))};`).join('\n');
  const outfile=path.join(dir,'routes.mjs');
  await build({stdin:{contents,resolveDir:root,loader:'ts'},outfile,bundle:true,platform:'node',format:'esm',packages:'external',logLevel:'silent',plugins:[{name:'qa-runtime',setup(b){

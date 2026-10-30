@@ -4,6 +4,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import Image from "next/image";
 import { createPortal } from "react-dom";
 import { normalizedVideoPoint } from "./remote-geometry";
+import TestConnectionInfo from "./components/test-connection-info";
 import ThemeToggle from "./components/theme-toggle";
 import { useInteraction } from "../lib/interaction/use-interaction";
 import type { InteractionEngine } from "../lib/interaction/engine";
@@ -1262,7 +1263,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       <header className="topbar">
         <div className="brand-lockup">
           <Image unoptimized className="brand-symbol" src="/brand/symbol.svg" width="32" height="32" alt="" />
-          <div><h1>Galaxy Remote <span className="version-label">2.0</span></h1></div>
+          <div><h1>린로 <span className="version-label">Linro</span></h1></div>
           <span role="status" className={`connection-pill ${connection}`}><span className="status-dot" />{phaseLabel}</span>
         </div>
         <div className="owner-area">
@@ -1532,9 +1533,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           <section ref={modalRef} tabIndex={-1} className="modal" role="dialog" aria-modal="true" aria-labelledby="pair-title" onMouseDown={(event) => event.stopPropagation()}>
             <button className="modal-close" type="button" aria-label="닫기" onClick={() => setDialog(null)}>×</button>
             <p className="eyebrow">DEVICE PAIRING</p><h2 id="pair-title">갤럭시를 등록해 주세요</h2>
-            <p>Galaxy Remote 2.0 앱을 연 다음 아래 6자리 코드를 입력하면 이 계정에 안전하게 등록됩니다.</p>
+            <p>린로 앱을 연 다음 아래 6자리 코드를 입력하면 이 계정에 안전하게 등록됩니다.</p>
             <h3>1. 휴대폰에 앱 설치</h3>
-            <p className="install-warning">2.0 시험 앱은 아직 공개 배포하지 않았습니다. 전달받은 테스트 APK를 설치하세요. 기존 앱은 삭제하지 마세요.</p>
+            <p className="install-warning">린로 시험 APK는 개발 검증용입니다. 기존 앱을 삭제하지 말고 서명이 일치하는지 확인하세요.</p>
             <details className="install-help"><summary>기존 앱을 업데이트하나요?</summary><p>업데이트 전 기존 앱과 시험 APK의 서명이 같은지 확인하세요. 기존 앱을 삭제하지 않고 설치한 뒤 등록 기기와 설정이 유지되는지 확인해 주세요. 실제 갤럭시에서 업데이트 설치와 새 기능 검증은 아직 진행되지 않았습니다.</p></details>
             <h3>2. 앱에 등록 코드 입력</h3>
             <div className="pair-code-panel">
@@ -1569,7 +1570,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               <button type="button" aria-pressed={pcMode === "public"} className={pcMode === "public" ? "active" : ""} onClick={() => changePcMode("public")}><strong>공용 PC</strong><small>설정 저장 안 함</small></button>
             </div>
             {pcMode === "public" && <button className="public-session-end" type="button" onClick={() => void endPublicSession()}>공용 PC 사용 종료</button>}
-            <h3>등록 기기</h3><p>등록 해제한 휴대폰은 새 코드로 다시 등록해야 연결할 수 있습니다.</p>
+            <TestConnectionInfo/><h3>등록 기기</h3><p>등록 해제한 휴대폰은 새 코드로 다시 등록해야 연결할 수 있습니다.</p>
             <div className="registered-device-list">
               {devices.length ? devices.map((device) => (
                 <div className="registered-device" key={device.id}>
@@ -1579,7 +1580,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 </div>
               )) : <div className="empty-device-list">등록된 기기가 없습니다.</div>}
             </div>
-            <p className="install-warning">2.0 시험 앱은 아직 공개 배포하지 않았습니다. 전달받은 테스트 APK를 설치하세요. 기존 앱은 삭제하지 마세요.</p>
+            <p className="install-warning">린로 시험 APK는 개발 검증용입니다. 기존 앱을 삭제하지 말고 서명이 일치하는지 확인하세요.</p>
           </section>
         </div>
       )}

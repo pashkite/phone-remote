@@ -26,7 +26,7 @@ class ApiClient(private val credentials: DeviceCredentials? = null) {
         return PairingResult(
             deviceId = response.getString("deviceId"),
             deviceToken = response.getString("deviceToken"),
-            signalingBaseUrl = response.optString("signalingBaseUrl", BuildConfig.SIGNALING_BASE_URL),
+            signalingBaseUrl = ApiOriginPolicy.pairedOrigin(BuildConfig.SIGNALING_BASE_URL, response.optString("signalingBaseUrl", BuildConfig.SIGNALING_BASE_URL)),
             owner = response.optString("owner", ""),
         )
     }
@@ -84,7 +84,7 @@ class ApiClient(private val credentials: DeviceCredentials? = null) {
     }
 
     private fun post(baseUrl: String, path: String, payload: JSONObject, authorize: Boolean): JSONObject {
-        val normalizedBase = baseUrl.trimEnd('/')
+        val normalizedBase = ApiOriginPolicy.canonical(baseUrl)
         require(normalizedBase.startsWith("https://")) { "HTTPS 연결 주소만 사용할 수 있습니다." }
         val connection = (URL("$normalizedBase$path").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -93,6 +93,7 @@ class ApiClient(private val credentials: DeviceCredentials? = null) {
             doInput = true
             doOutput = true
             useCaches = false
+            instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json; charset=utf-8")
             setRequestProperty("User-Agent", "GalaxyRemote/${BuildConfig.VERSION_NAME} Android")
@@ -108,6 +109,7 @@ class ApiClient(private val credentials: DeviceCredentials? = null) {
                 stream.write(payload.toString().toByteArray(Charsets.UTF_8))
             }
             val status = connection.responseCode
+            if (status in 300..399) throw ApiException("시그널링 서버가 다른 주소로 이동했습니다. QA 주소와 Sites API 인증 설정을 확인하세요.", status)
             val source = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = source?.use { input ->
                 BufferedReader(InputStreamReader(input, Charsets.UTF_8)).readText()

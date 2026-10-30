@@ -326,7 +326,7 @@ class RemoteControlService : Service() {
             "clipboardSet" -> {
                 val text = command.optString("text")
                 if (text.toByteArray(Charsets.UTF_8).size > 65536) { finish(false, "CLIPBOARD_TOO_LARGE"); return }
-                try { getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("Galaxy Remote 2.0", text)); finish(true, null) }
+                try { getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("린로", text)); finish(true, null) }
                 catch (_: Exception) { finish(false, "CLIPBOARD_ACCESS_RESTRICTED") }
             }
             "clipboardPaste" -> {
@@ -412,7 +412,7 @@ class RemoteControlService : Service() {
         )
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_remote)
-            .setContentTitle(if (isConnected) "Galaxy Remote 2.0 연결됨" else "Galaxy Remote 2.0 화면 공유")
+            .setContentTitle(if (isConnected) "린로 연결됨" else "린로 화면 공유")
             .setContentText(message)
             .setContentIntent(openIntent)
             .setOngoing(true)

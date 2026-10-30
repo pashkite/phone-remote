@@ -1,13 +1,13 @@
 {
   "id": "/",
-  "name": "Galaxy Remote 2.0",
-  "short_name": "Galaxy Remote",
-  "description": "Use your own Galaxy phone from your browser.",
+  "name": "린로",
+  "short_name": "Linro",
+  "description": "Linro · Link Road — 개인용 갤럭시 원격 콘솔",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#111C2A",
-  "theme_color": "#111C2A",
+  "background_color": "#0B1B3D",
+  "theme_color": "#0B1B3D",
   "icons": [
     {
       "src": "/brand/icon-192.png",

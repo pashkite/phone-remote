@@ -1,0 +1,15 @@
+{
+  "nameKo": "린로",
+  "nameEn": "Linro",
+  "meaning": "Link Road",
+  "icon": {
+    "status": "approved-reference",
+    "reference": "assets/brand/linro/reference-256.webp",
+    "referenceCommit": "3f853b455594d14e26565e789dbc56124c4bae10",
+    "canonical1024BytesAvailable": false,
+    "note": "User supplied matching 1024px image in chat; repository reference is a compressed 256px preview. Generated adaptive foreground is a derivative, not the original PNG.",
+    "referenceSha256": "c1179c05f9f253f2a9d9191d9cc6d4c81fdb3d96347933e96b7f76bf27843694",
+    "adaptiveForeground": "assets/brand/linro/adaptive-foreground-derived.png",
+    "adaptiveForegroundKind": "Image-generation edit of user-supplied approved image; isolated foreground derivative, not canonical original"
+  }
+}

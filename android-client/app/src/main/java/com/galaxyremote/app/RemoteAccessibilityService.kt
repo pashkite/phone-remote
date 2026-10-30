@@ -185,7 +185,7 @@ class RemoteAccessibilityService : AccessibilityService() {
                 clipboardCaptured = true
             }
             mainHandler.removeCallbacks(restoreClipboard)
-            clipboard.setPrimaryClip(ClipData.newPlainText("Galaxy Remote 2.0 입력", value.take(2_000)))
+            clipboard.setPrimaryClip(ClipData.newPlainText("린로 입력", value.take(2_000)))
             val pasted = focused.performAction(AccessibilityNodeInfo.ACTION_PASTE)
             mainHandler.postDelayed(restoreClipboard, 800L)
             pasted || replaceFocusedText(value, false)

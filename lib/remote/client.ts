@@ -118,7 +118,7 @@ export class RemoteClient {
     }
   }
   audioVolume(value: number) { this.player.volume(value); }
-  exportDiagnostics() { downloadBlob(new Blob([this.diagnostics.export()], { type: "application/json" }), `GalaxyRemote-diagnostics-${timestamp()}.json`); }
+  exportDiagnostics() { downloadBlob(new Blob([this.diagnostics.export()], { type: "application/json" }), `Linro-diagnostics-${timestamp()}.json`); }
   close() { if(this.closed)return;this.closed=true;this.channel.onmessage=null;
     for(const channel of this.extensionChannels){channel.onmessage=null;channel.onclose=null;channel.close();}this.extensionChannels.clear();
     this.inputSessionId = null; this.inputError = null; this.senderMetrics = null; this.fileTransfer?.close(); this.recording.stop(); this.player.close(); this.pending.forEach(p => clearTimeout(p.timer)); this.pending.clear(); this.update({ features: [], clipboard: "", offer: null, audio: false, audioStatus: "꺼짐" }); this.diagnostics.record("channel", { state: "closed" });this.listeners.clear(); }

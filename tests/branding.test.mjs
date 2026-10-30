@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
 import {inflateSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url));
 function crc32(bytes){let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;}
@@ -21,24 +22,32 @@ test('favicon ICO contains three independently valid 16/32/48 PNG images',()=>{
  const sizes=[];for(let i=0;i<3;i++){const o=6+16*i,w=b[o],h=b[o+1],length=b.readUInt32LE(o+8),start=b.readUInt32LE(o+12);sizes.push(w);assert.ok(start>=54&&start+length<=b.length);png(b.subarray(start,start+length),w,h);}assert.deepEqual(sizes,[16,32,48]);
 });
 test('manifest references existing assets, branding and a scoped root entry point',()=>{
- const m=JSON.parse(read('public/manifest.webmanifest'));assert.equal(m.name,'Galaxy Remote 2.0');assert.equal(m.short_name,'Galaxy Remote');assert.equal(m.scope,'/');assert.equal(m.start_url,'/');
+ const m=JSON.parse(read('public/manifest.webmanifest'));assert.equal(m.name,'린로');assert.equal(m.short_name,'Linro');assert.equal(m.scope,'/');assert.equal(m.start_url,'/');
  for(const icon of m.icons){assert.equal(icon.type,'image/png');const [w,h]=icon.sizes.split('x').map(Number);png(read('public'+icon.src),w,h);}assert.ok(m.icons.some(i=>i.purpose==='maskable'));
- assert.deepEqual(read('public/favicon.svg'),read('assets/brand/galaxy-remote-symbol.svg'));assert.deepEqual(read('public/brand/symbol.svg'),read('assets/brand/galaxy-remote-symbol.svg'));
+ assert.deepEqual(read('public/favicon.svg'),read('assets/brand/linro/linro-symbol.svg'));assert.deepEqual(read('public/brand/symbol.svg'),read('assets/brand/linro/linro-symbol.svg'));
 });
 test('Android XML parses, adaptive master paths match and package/display identities remain separate',()=>{
  const result=spawnSync('python3',['-c',`from pathlib import Path
 import xml.etree.ElementTree as E
 r=Path('android-client/app/src');a='{http://schemas.android.com/apk/res/android}'
 for p in r.rglob('*.xml'): E.parse(p)
-master=E.parse('assets/brand/galaxy-remote-symbol.svg').getroot();paths=[p.attrib['d'] for p in master.iter('{http://www.w3.org/2000/svg}path')]
-for name in ('ic_brand_foreground','ic_brand_monochrome'):
- v=E.parse(r/'main/res/drawable'/f'{name}.xml').getroot();assert [p.attrib[a+'pathData'] for p in v.iter('path')]==paths
+for name,resource in [('ic_brand_foreground','linro_foreground'),('ic_brand_monochrome','linro_monochrome')]:
+ v=E.parse(r/'main/res/drawable'/f'{name}.xml').getroot();assert v.tag=='bitmap';assert v.attrib[a+'src']=='@drawable/'+resource;assert (r/'main/res/drawable-nodpi'/f'{resource}.png').is_file()
 for v in (26,33):
  for name in ('ic_launcher','ic_launcher_round'):
   icon=E.parse(r/f'main/res/mipmap-anydpi-v{v}/{name}.xml').getroot();assert icon.tag=='adaptive-icon';assert icon.find('foreground') is not None;assert (icon.find('monochrome') is not None)==(v==33)
-for variant,label in [('main','Galaxy Remote 2.0'),('panelTest','Galaxy Remote 2.0 Test')]:
+for variant,label in [('main','린로'),('panelTest','린로')]:
  strings=E.parse(r/f'{variant}/res/values/strings.xml').getroot();assert strings.find("string[@name='app_name']").text==label
 `],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
  for(const [density,n] of [['mdpi',48],['hdpi',72],['xhdpi',96],['xxhdpi',144],['xxxhdpi',192]])for(const variant of ['main','panelTest'])for(const icon of ['ic_launcher','ic_launcher_round'])png(read(`android-client/app/src/${variant}/res/mipmap-${density}/${icon}.png`),n,n);
  const gradle=read('android-client/app/build.gradle.kts').toString();assert.match(gradle,/applicationId = "com.galaxyremote.app"/);assert.match(gradle,/applicationIdSuffix = ".paneltest"/);
+});
+
+test('Linro icon exports retain the approved source and clearly identify derived foreground',()=>{
+ const identity=JSON.parse(read('assets/brand/linro/identity.json'));
+ assert.equal(identity.nameKo,'린로');assert.equal(identity.nameEn,'Linro');assert.equal(identity.meaning,'Link Road');assert.equal(identity.icon.referenceCommit,'3f853b455594d14e26565e789dbc56124c4bae10');
+ assert.equal(createHash('sha256').update(read(identity.icon.reference)).digest('hex'),identity.icon.referenceSha256);
+ assert.equal(identity.icon.canonical1024BytesAvailable,false);assert.match(identity.icon.adaptiveForegroundKind,/derivative/);
+ for(const name of ['linro_foreground','linro_monochrome'])png(read(`android-client/app/src/main/res/drawable-nodpi/${name}.png`),512,512);
+ assert.match(read('public/favicon.svg').toString(),/data:image\/png;base64,/);
 });

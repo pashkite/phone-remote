@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
-/* Galaxy Remote 2.0: one token set, with the existing light-theme preference. */
-:root { color-scheme:dark; --page:#0b1119; --surface:#111c2a; --surface-soft:#192638; --ink:#e3edf7; --muted:#a5b5c8; --line:#304158; --primary:#67d8ca; --primary-dark:#8ae9de; --blue-soft:#193a42; --online:#67d8ca; --danger:#ff9f9f; --radius:8px; }
+/* Linro: one token set, with the existing light-theme preference. */
+:root { color-scheme:dark; --page:#0b1119; --surface:#111c2a; --surface-soft:#192638; --ink:#e3edf7; --muted:#a5b5c8; --line:#304158; --primary:#91bfff; --primary-dark:#b5d4ff; --blue-soft:#18335a; --online:#67d8ca; --danger:#ff9f9f; --radius:8px; }
 :root[data-theme="light"] { color-scheme:light; --page:#f1f5f9; --surface:#fff; --surface-soft:#e8eff5; --ink:#142337; --muted:#4d6076; --line:#aabccf; --primary:#006b62; --primary-dark:#00544d; --blue-soft:#d9f2ed; --online:#00756b; --danger:#a82535; }
 * { box-sizing:border-box; }
 html { min-width:320px; background:var(--page); }

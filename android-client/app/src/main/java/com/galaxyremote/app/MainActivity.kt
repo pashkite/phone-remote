@@ -138,7 +138,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openRemoteTools() {
-        val labels = arrayOf("클립보드 텍스트를 PC로 보내기", "파일을 PC로 보내기", "PC 파일 수신 승인·저장 위치 선택", "재생 소리 캡처 권한 설정", "대기 모드 선택", "진단 보기", "진단 JSON 내보내기", "파일 전송 취소")
+        val labels = arrayOf("클립보드 텍스트를 PC로 보내기", "파일을 PC로 보내기", "PC 파일 수신 승인·저장 위치 선택", "재생 소리 캡처 권한 설정", "대기 모드 선택", "진단 보기", "진단 JSON 내보내기", "파일 전송 취소", "테스트 연결 정보")
         AlertDialog.Builder(this).setTitle("전송·대기·진단").setItems(labels) { _, which ->
             when (which) {
                 0 -> {
@@ -164,8 +164,11 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, "대기 모드가 변경됐습니다. 자동 연결 중에는 화면 공유 승인 세션을 유지합니다.", Toast.LENGTH_LONG).show()
                 }.show()
                 5 -> AlertDialog.Builder(this).setTitle("로컬 진단").setMessage(RemoteDiagnostics.export(this)).setPositiveButton("닫기", null).show()
-                6 -> diagnosticsPicker.launch("GalaxyRemote-diagnostics-${System.currentTimeMillis()}.json")
+                6 -> diagnosticsPicker.launch("Linro-diagnostics-${System.currentTimeMillis()}.json")
                 7 -> RemoteFileTransfer.current?.cancel()
+                8 -> AlertDialog.Builder(this).setTitle("린로 · 테스트 연결 정보")
+                    .setMessage("시험 버전: ${BuildConfig.DEVICE_TEST_BUILD_ID}\n패키지: ${BuildConfig.APPLICATION_ID}\n앱 버전 코드: ${BuildConfig.VERSION_CODE}\n신규 등록 주소: ${BuildConfig.SIGNALING_BASE_URL}\n기존 등록 주소: ${preferences.credentials?.baseUrl ?: "미등록"}\n\n웹 설정의 테스트 연결 정보와 주소·시험 버전을 비교하세요. 기존 등록 정보는 업데이트로 바뀌지 않습니다. 실기기·패널 OFF·복구는 미검증입니다.")
+                    .setPositiveButton("닫기", null).show()
             }
         }.show()
     }
@@ -419,7 +422,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun configureRemoteKeyboard() {
         if (!RemoteKeyboardService.isEnabled(this)) {
-            Toast.makeText(this, "목록에서 Galaxy Remote 2.0 키보드를 먼저 켜 주세요.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "목록에서 린로 키보드를 먼저 켜 주세요.", Toast.LENGTH_LONG).show()
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
             return
         }
@@ -686,7 +689,7 @@ class MainActivity : AppCompatActivity() {
         accessibilityStatus.text = if (accessibilityEnabled) {
             "허용됨 · PC의 터치와 키 입력을 전달할 준비가 됐어요."
         } else {
-            "접근성 설정에서 ‘Galaxy Remote 2.0 조작’을 허용해 주세요."
+            "접근성 설정에서 ‘린로 조작’을 허용해 주세요."
         }
         accessibilityStatus.setTextColor(
             ContextCompat.getColor(this, if (accessibilityEnabled) R.color.online else R.color.muted),
@@ -695,7 +698,7 @@ class MainActivity : AppCompatActivity() {
 
         keyboardStatus.text = when {
             keyboardSelected -> "선택됨 · Discord 같은 앱에서도 실제 입력 칸으로 문자를 전달합니다."
-            keyboardEnabled -> "켜짐 · 키보드 선택 버튼을 눌러 Galaxy Remote 2.0을 선택해 주세요."
+            keyboardEnabled -> "켜짐 · 키보드 선택 버튼을 눌러 린로를 선택해 주세요."
             else -> "선택 사항 · 복잡한 채팅 앱에서 입력 지연과 문자 오염을 줄여 줍니다."
         }
         keyboardStatus.setTextColor(
@@ -703,7 +706,7 @@ class MainActivity : AppCompatActivity() {
         )
         keyboardButton.text = when {
             keyboardSelected -> "키보드 선택 변경"
-            keyboardEnabled -> "Galaxy Remote 2.0 키보드 선택"
+            keyboardEnabled -> "린로 키보드 선택"
             else -> "원격 키보드 켜기"
         }
 

@@ -11,13 +11,13 @@ const screenshot=async(name)=>page.screenshot({path:`${output}/${name}.png`,full
 try {
  await page.goto(base);await page.getByRole('heading',{name:'Browser test phone',exact:true}).waitFor();
  await check('branding metadata and real favicon/PNG/manifest MIME responses',async()=>{
-  assert.equal(await page.title(),'Galaxy Remote 2.0');
-  assert.equal(await page.locator('meta[name="application-name"]').getAttribute('content'),'Galaxy Remote 2.0');
-  assert.equal(await page.locator('meta[property="og:title"]').getAttribute('content'),'Galaxy Remote 2.0');
-  for(const [path,mime] of [['/favicon.svg?v=2','image/svg+xml'],['/favicon.ico?v=2','image/'],['/brand/icon-180.png','image/png'],['/manifest.webmanifest?v=2','manifest']]){
+  assert.equal(await page.title(),'린로 | Linro');
+  assert.equal(await page.locator('meta[name="application-name"]').getAttribute('content'),'린로');
+  assert.equal(await page.locator('meta[property="og:title"]').getAttribute('content'),'린로 | Linro');
+  for(const [path,mime] of [['/favicon.svg?v=linro-7','image/svg+xml'],['/favicon.ico?v=linro-7','image/'],['/brand/icon-180.png','image/png'],['/manifest.webmanifest?v=linro-7','manifest']]){
    const response=await page.request.get(base+path);assert.equal(response.status(),200);assert.ok(response.headers()['content-type'].includes(mime),response.headers()['content-type']);
   }
-  const manifest=await (await page.request.get(base+'/manifest.webmanifest')).json();assert.equal(manifest.name,'Galaxy Remote 2.0');assert.equal(manifest.short_name,'Galaxy Remote');
+  const manifest=await (await page.request.get(base+'/manifest.webmanifest')).json();assert.equal(manifest.name,'린로');assert.equal(manifest.short_name,'Linro');
   for(const icon of manifest.icons){assert.equal((await page.request.get(base+icon.src)).status(),200);}
   assert.equal(await page.locator('link[rel="apple-touch-icon"]').getAttribute('href'),'/brand/icon-180.png');
  });
@@ -103,7 +103,7 @@ await check('guest login and small-size icons render in real Chromium',async()=>
   await guest.page.goto(guest.base);await guest.page.getByRole('link',{name:'로그인하여 연결',exact:true}).waitFor();await guest.page.screenshot({path:`${output}/11-guest.png`,fullPage:true});
   assert.ok((await guest.page.locator('.phone-view').boundingBox()).height>200);
   assert.match(await guest.page.getByRole('link',{name:'로그인하여 연결',exact:true}).getAttribute('href'),/signin-with-chatgpt/);
-  const icons=await guest.context.newPage();await icons.goto(guest.base+"/manifest.webmanifest");await icons.setContent(`<html><body style="margin:0;background:#f1f5f9;font:14px sans-serif;padding:32px"><h1>Galaxy Remote 2.0 — asset rendering check</h1><p>True size 16 / 32 / 48 / 192 / 512. Round masks are browser previews, not a Galaxy launcher.</p><div style="display:flex;align-items:center;gap:32px">${[16,32,48,192,512].map(n=>`<figure><img src="${guest.base}/brand/icon-${n}.png" width="${n}" height="${n}"><figcaption>${n}px</figcaption></figure>`).join('')}</div><div style="display:flex;gap:24px;padding:32px;background:#111c2a"><img src="${guest.base}/brand/icon-192.png" width="120" style="border-radius:50%"><img src="${guest.base}/brand/icon-192.png" width="120" style="border-radius:25%"><img src="${guest.base}/brand/maskable-512.png" width="120" style="border-radius:50%"></div></body></html>`);
+  const icons=await guest.context.newPage();await icons.goto(guest.base+"/manifest.webmanifest");await icons.setContent(`<html><body style="margin:0;background:#f1f5f9;font:14px sans-serif;padding:32px"><h1>Linro — asset rendering check</h1><p>True size 16 / 32 / 48 / 192 / 512. Round masks are browser previews, not a Galaxy launcher.</p><div style="display:flex;align-items:center;gap:32px">${[16,32,48,192,512].map(n=>`<figure><img src="${guest.base}/brand/icon-${n}.png" width="${n}" height="${n}"><figcaption>${n}px</figcaption></figure>`).join('')}</div><div style="display:flex;gap:24px;padding:32px;background:#111c2a"><img src="${guest.base}/brand/icon-192.png" width="120" style="border-radius:50%"><img src="${guest.base}/brand/icon-192.png" width="120" style="border-radius:25%"><img src="${guest.base}/brand/maskable-512.png" width="120" style="border-radius:50%"></div></body></html>`);
   await icons.waitForFunction(()=>document.images.length===8&&[...document.images].every(i=>i.complete&&i.naturalWidth>0));await icons.screenshot({path:`${output}/12-brand-sizes-masks.png`,fullPage:true});
  }finally{await guest.browser.close();}
 });
