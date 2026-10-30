@@ -1,0 +1,38 @@
+Galaxy Remote 2.0 stage 5 — local execution evidence (2026-10-30)
+Base: 2521dafa4475bb3d52c700d03100c0ec7ef2eec3
+Source commits: a841041, d069575
+
+npm run lint: PASS (0 errors, 0 warnings)
+scripts/test-web-streaming.sh:
+  Wrangler types: PASS
+  TypeScript --noEmit: PASS
+  vinext production build: PASS
+  Worker artifact validation: PASS
+  Node tests: 80 passed / 0 failed / 0 skipped (73 existing + 7 added)
+  Python unittest: 6 passed / 0 failed
+
+Gradle:
+  :app:testDebugUnitTest — 15 passed / 0 failures / 0 errors / 0 skipped
+  :app:testPanelTestUnitTest — 15 passed / 0 failures / 0 errors / 0 skipped
+  :app:assemblePanelTest — PASS (arm64-v8a, debug signed)
+  :app:assembleDebug — PASS (x86_64, debug signed)
+  :app:assembleRelease — PASS (arm64-v8a, UNSIGNED)
+  :app:assembleDebugAndroidTest — PASS (compiled, NOT RUN on device)
+
+Chromium actual rendering and input, with simulated phone/API:
+  scripts/test-interaction-browser.mjs: PASS
+  scripts/test-ux-branding-browser.mjs: PASS (11 scenario groups)
+  Five viewport sizes x three modes; light theme; keyboard focus/Escape;
+  connection phase gating; pairing errors/expiry; mapping drag/zoom/rotation;
+  profile preservation and failed/corrupt storage; icons decoded and HTTP MIME checked.
+
+No connected adb device. No KVM. Real Galaxy panel OFF, input, performance,
+recovery, launcher icons, installed-app update compatibility: UNVERIFIED.
+No production deployment or public APK update performed.
+
+A full-suite run initially exposed a pre-existing 15ms async SHA-256 test race
+(remote-protocol.test.mjs, corrupt incoming file). The assertion now waits for
+its public cancellation state with a 2-second bound; no test was disabled or skipped.
+The final complete suite passed all 80 tests.
+
+PR API read: Forbidden. No PR created. Use the branch comparison URL in the report.

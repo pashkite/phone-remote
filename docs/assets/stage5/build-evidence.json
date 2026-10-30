@@ -1,0 +1,89 @@
+{
+  "android-client/app/build/outputs/apk/panelTest/app-panelTest.apk": {
+    "sha256": "5876ce3087ab54093b60f482ecea51fbf20c99a937ee6b3836f53208830eda49",
+    "bytes": 16317042,
+    "abis": [
+      "arm64-v8a"
+    ],
+    "badging": [
+      "package: name='com.galaxyremote.app.paneltest' versionCode='17' versionName='0.5.3-panel-experiment' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'",
+      "application-label:'Galaxy Remote 2.0 Test'",
+      "application-icon-160:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-240:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-320:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-480:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-640:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-65534:'res/mipmap-anydpi-v33/ic_launcher.xml'"
+    ],
+    "signature": [
+      "Verified using v2 scheme (APK Signature Scheme v2): true",
+      "Signer #1 certificate SHA-256 digest: 8f568dd3778c9b0f8a316427c1a2e048a2f454f153a9b6d40dd3e4337dd0748f"
+    ],
+    "zip_alignment_pass": true
+  },
+  "android-client/app/build/outputs/apk/debug/app-debug.apk": {
+    "sha256": "33a3591a0d62b81d48852408fceb5b900d29245d568e9f4e1d2fb3af28a3ce4c",
+    "bytes": 20285523,
+    "abis": [
+      "x86_64"
+    ],
+    "badging": [
+      "package: name='com.galaxyremote.app' versionCode='17' versionName='0.5.3' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'",
+      "application-label:'Galaxy Remote 2.0'",
+      "application-icon-160:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-240:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-320:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-480:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-640:'res/mipmap-anydpi-v33/ic_launcher.xml'",
+      "application-icon-65534:'res/mipmap-anydpi-v33/ic_launcher.xml'"
+    ],
+    "signature": [
+      "Verified using v2 scheme (APK Signature Scheme v2): true",
+      "Signer #1 certificate SHA-256 digest: 8f568dd3778c9b0f8a316427c1a2e048a2f454f153a9b6d40dd3e4337dd0748f"
+    ],
+    "zip_alignment_pass": true
+  },
+  "android-client/app/build/outputs/apk/release/app-release-unsigned.apk": {
+    "sha256": "6a46d392ab19eea23bf2709cede2a59f1079837fd6adcd8dfcdbc573d0be42e5",
+    "bytes": 15112297,
+    "abis": [
+      "arm64-v8a"
+    ],
+    "badging": [
+      "package: name='com.galaxyremote.app' versionCode='17' versionName='0.5.3' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'",
+      "application-label:'Galaxy Remote 2.0'",
+      "application-icon-160:'res/IG.xml'",
+      "application-icon-240:'res/IG.xml'",
+      "application-icon-320:'res/IG.xml'",
+      "application-icon-480:'res/IG.xml'",
+      "application-icon-640:'res/IG.xml'",
+      "application-icon-65534:'res/IG.xml'"
+    ],
+    "zip_alignment_pass": true
+  },
+  "android-client/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk": {
+    "sha256": "26b6975b0d59a2a798710f42849ea4d771cea2524f5d7ce854e752301cd7efff",
+    "bytes": 438141,
+    "abis": [],
+    "badging": [
+      "package: name='com.galaxyremote.app.test' versionCode='' versionName='' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'"
+    ],
+    "signature": [
+      "Verified using v2 scheme (APK Signature Scheme v2): true",
+      "Signer #1 certificate SHA-256 digest: 8f568dd3778c9b0f8a316427c1a2e048a2f454f153a9b6d40dd3e4337dd0748f"
+    ],
+    "zip_alignment_pass": true
+  },
+  "testDebugUnitTest": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "testPanelTestUnitTest": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}
