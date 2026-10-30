@@ -9,10 +9,29 @@
   "last_successful_version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_1e0f943ff7408191afd4f821d2857c87",
   "last_successful_deployment_id": "appgdep_6acf5ed69de48191931c07f560bc41ec",
   "last_checked_github_sha": null,
-  "lock": {
-    "owner": "setup-20261031-initial",
-    "acquired_at": "2026-10-30T21:49:30Z"
+  "lock": null,
+  "pending": {
+    "github_sha": "6971be1511de9131580bcfe505821de10d0509aa",
+    "sites_sha": "30f06aadcf07635f87b322d950fe8365d0a7fc67",
+    "version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_3a51f06b9790819190b1b5ac261c76aa",
+    "previous_version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_1e0f943ff7408191afd4f821d2857c87",
+    "previous_deployment_id": "appgdep_6acf5ed69de48191931c07f560bc41ec",
+    "phase": "validated_saved_candidate",
+    "validation": {
+      "build": "passed",
+      "typescript": "passed",
+      "tests_passed": 94,
+      "tests_failed": 0,
+      "db_and_migrations_unchanged": true,
+      "apk_assets_unchanged": 17,
+      "secret_scan": "passed",
+      "environment_revision": 2,
+      "web_source_sha256": "810334b87e399cb719c73bfe10971a8e41f180d3a6c9ed7c695645238e2c8218",
+      "unverified": [
+        "signed-in production browser flow",
+        "physical Android/WebRTC"
+      ]
+    }
   },
-  "pending": null,
-  "last_result": "initial setup; serialized state write test"
+  "last_result": "version 48 saved, validated and ready for unattended initial deployment"
 }
