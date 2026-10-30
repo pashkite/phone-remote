@@ -1,9 +1,9 @@
-# Galaxy Remote 2.0 — 실기기 QA 기록
+# 린로 (Linro) — 실기기 QA 기록
 
 실제 수행자/날짜:
 모델 / Android / One UI / 펌웨어:
 APK SHA-256 / 표시 이름 / 패키지 / 서명 인증서:
-웹 URL / commit / 앱 signaling origin 일치 확인:
+웹 URL / commit / 앱 signaling origin 일치 확인 / 시험 build ID:
 PC·브라우저 / 네트워크·TURN 여부:
 복구 자격 확인 담당자와 해당 펌웨어의 실제 복구 근거:
 

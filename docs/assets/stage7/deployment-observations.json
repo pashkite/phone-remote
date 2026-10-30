@@ -1,0 +1,13 @@
+{
+  "liveWebsiteVerified": false,
+  "deploymentMetadataQuery": "GitHub deployments API: Forbidden",
+  "sitesManagementToolsAvailable": false,
+  "existingHostsAllowedByCloudNetworkPolicy": false,
+  "apkCompiledDefaultOrigin": "https://galaxy-remote-control.ashkite.chatgpt.site",
+  "savedRegistrationOrigin": "Preserved on device; no connected device to read",
+  "qaOrigin": null,
+  "qaSiteCreated": false,
+  "databaseModified": false,
+  "newDomainCreated": false,
+  "nativeWebRTC": "BLOCKED in managed Chromium: disable_non_proxied_udp; native script timed out"
+}

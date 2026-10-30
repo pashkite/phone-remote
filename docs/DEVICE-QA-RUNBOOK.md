@@ -1,6 +1,6 @@
-# Galaxy Remote 2.0 — Windows·Galaxy 최종 실기기 QA
+# 린로 (Linro) — Windows·Galaxy 실기기 QA
 
-현재 판정: **CONDITIONAL GO**. 이 문서는 사용자가 수행할 절차다. 클라우드 개발 환경에서 실제 갤럭시 설치·화면 OFF·복구를 수행하거나 성공 판정하지 않았다.
+현재 판정: **CONDITIONAL GO**. [7단계 최신 준비 보고서](LINRO-DEVICE-TEST-READY.md)의 웹 준비 상태와 APK 정보를 먼저 확인한다. 이 문서는 사용자가 수행할 절차다. 클라우드 개발 환경에서 실제 갤럭시 설치·화면 OFF·복구를 수행하거나 성공 판정하지 않았다.
 
 **복구 경로와 해당 기기의 실제 패널 매핑이 충분히 검증되지 않았다면 패널 OFF 시험을 하지 마세요.** 화면 ON에서 복구 명령이 반환된 것만으로 OFF 후 복구가 검증된 것은 아니다. OFF를 건너뛰어도 나머지 QA는 진행할 수 있다.
 
@@ -9,8 +9,8 @@
 - Windows 10/11 PC, 신뢰하는 USB 케이블, arm64 Galaxy, 앱 설치/디버깅을 승인할 기기 소유자.
 - Android 15/16·One UI 버전, 모델, 빌드 번호, 배터리/충전 상태를 기록한다. 업무 관리 기기의 제한은 우회하지 않는다.
 - 시험 APK는 `com.galaxyremote.app.paneltest`; 운영 앱 `com.galaxyremote.app`을 삭제하지 않는다.
-- **QA 웹 주소가 먼저 필요하다.** 6단계 브랜치를 운영 사이트에 자동 배포하지 않았다. APK도 기존 signaling URL/기존 등록 주소를 유지한다. 새 웹 전체를 시험하려면 검토된 QA 웹과 APK의 signaling origin이 일치하는지 담당자가 확인해야 한다. 검토되지 않은 주소를 allowlist에 넣거나 HTTPS 검사를 끄지 않는다.
-- QA 웹이 준비되지 않았다면 APK 설치/표시/권한 점검까지만 진행한다. 기존 운영 사이트에서의 시험을 6단계 웹 검증으로 기록하지 않는다. 운영 데이터에 시험 기기를 등록하기 전 소유자가 범위를 결정한다.
+- **QA 웹 주소가 먼저 필요하다.** 7단계 브랜치를 운영 사이트에 자동 배포하지 않았다. APK도 기존 signaling URL/기존 등록 주소를 유지한다. 새 웹 전체를 시험하려면 검토된 QA 웹과 APK의 signaling origin이 일치하는지 담당자가 확인해야 한다. 검토되지 않은 주소를 allowlist에 넣거나 HTTPS 검사를 끄지 않는다.
+- QA 웹이 준비되지 않았다면 APK 설치/표시/권한 점검까지만 진행한다. 기존 운영 사이트에서의 시험을 7단계 웹 검증으로 기록하지 않는다. 운영 데이터에 시험 기기를 등록하기 전 소유자가 범위를 결정한다.
 - 다른 PC용 원격 제어 클라이언트는 필요 없다. 아래 ADB는 최초 개발 검증/복구에만 사용한다.
 
 ## 2. Windows용 ADB 설치
@@ -42,12 +42,12 @@ $Serial = '목록에서 확인한 본인 기기의 ID'
 
 ## 4. APK 다운로드·무결성·설치
 
-GitHub에서 저장소에 로그인 → `feature/galaxy-remote-2-integration-qa` 브랜치 → [시험 APK 파일](../qa-artifacts/stage6/GalaxyRemote-2.0-stage6-arm64-paneltest.apk) → **Download raw file**을 선택한다. 로컬 `/workspace` 경로에 접근할 필요가 없다.
+GitHub에서 저장소에 로그인 → `feature/linro-device-test-preparation` 브랜치 → [시험 APK 파일](../qa-artifacts/stage7/Linro-stage7-arm64-paneltest.apk) → **Download raw file**을 선택한다. 로컬 `/workspace` 경로에 접근할 필요가 없다.
 
-[apk-info.json](../qa-artifacts/stage6/apk-info.json)과 [SHA256SUMS](../qa-artifacts/stage6/SHA256SUMS.txt)의 hash를 확인한다.
+[apk-info.json](../qa-artifacts/stage7/apk-info.json)과 [SHA256SUMS](../qa-artifacts/stage7/SHA256SUMS.txt)의 hash를 확인한다.
 
 ```powershell
-$Apk = "$env:USERPROFILE\Downloads\GalaxyRemote-2.0-stage6-arm64-paneltest.apk"
+$Apk = "$env:USERPROFILE\Downloads\Linro-stage7-arm64-paneltest.apk"
 Get-FileHash -Algorithm SHA256 $Apk
 & $Adb -s $Serial install -r $Apk
 ```
@@ -61,33 +61,33 @@ Get-FileHash -Algorithm SHA256 $Apk
 | 용도 | 이름 | 패키지/표식 |
 |---|---|---|
 | 기존 운영 앱 | Galaxy Remote 또는 Galaxy Remote 2.0 | `com.galaxyremote.app` |
-| 이번 시험 앱 | Galaxy Remote 2.0 Test | `com.galaxyremote.app.paneltest`, 작은 앰버 점 |
+| 이번 시험 앱 | 린로 | `com.galaxyremote.app.paneltest`, BETA 표시 |
 
 ```powershell
 & $Adb -s $Serial shell pm list packages galaxyremote
 ```
 
-제공 arm64 panelTest만 Galaxy용이다. CI의 debug x86_64 APK는 에뮬레이터용이며 release-unsigned는 서명 전 설치용이 아니다. package ID와 기존 키를 바꾸지 않았다. 브랜드는 이번 QA에서도 Galaxy Remote 2.0이다. 별도 Linro 브랜딩 결정은 최종 릴리스 전에 확인하며 임의 변경하지 않는다.
+제공 arm64 panelTest만 Galaxy용이다. CI의 debug x86_64 APK는 에뮬레이터용이며 release-unsigned는 서명 전 설치용이 아니다. package ID와 기존 키를 바꾸지 않았다. 최종 이름은 린로(Linro), 뜻은 Link Road다. 시험 앱도 이름은 린로이며 아이콘의 BETA와 패키지로 구분한다.
 
-## 6. 테스트 앱 계정·기기 연결
-
-검토된 QA 웹 주소/앱 origin 일치를 다시 확인한다. 웹에서 소유자 계정 로그인 → 새 기기 등록 → 6자리 코드 생성 → **Test 앱**에서 입력 → 웹에서 새 기기 등록 확인 순서다.
-
-잘못된 코드, 만료, 재사용, 네트워크 중단을 각각 시험하고 기대 오류를 기록한다. 재사용 코드는 새 기기를 생성하면 안 된다. 다른 계정으로 바꾼 뒤 이전 기기가 보이거나 조작되면 중단한다. Sites의 실제 로그인/세션 만료는 별도 실환경 검증 항목이다.
-
-시험 뒤 불필요한 기기는 웹 설정에서 **등록 해제**한다. 운영 기기와 구분한 이름을 사용한다. 기기 토큰/등록 코드를 화면 캡처나 공개 이슈에 올리지 않는다.
-
-## 7. Android 권한 승인
+## 6. Android 권한 승인
 
 앱 설명을 읽고 기기 소유자가 직접 승인한다.
 
-- 접근성: Galaxy Remote 2.0 조작/해당 Test 앱 서비스인지 확인.
+- 접근성: 린로 조작/해당 Test 앱 서비스인지 확인.
 - 화면 공유: Android MediaProjection 확인창에서 현재 세션을 승인.
 - 연결 요청 알림: 앱에서 요청 대기를 켜고 알림 권한 확인.
 - 원격 키보드: 필요할 때만 켜고 선택. 개인정보/암호 입력은 시험하지 않는다.
 - 오디오: 지원되는 경우 앱의 재생 소리 캡처 권한을 별도로 승인. 보호된 앱의 소리는 무음일 수 있다.
 
 Shizuku 권한은 일반 연결의 필수 권한이 아니다. 패널 OFF 실험 전에만 별도로 다룬다. 권한 거절/철회 시 UI와 입력 중지를 확인한다.
+
+## 7. 테스트 앱 계정·기기 연결
+
+검토된 QA 웹 주소/앱 origin 일치를 다시 확인한다. 웹에서 소유자 계정 로그인 → 새 기기 등록 → 6자리 코드 생성 → **Test 앱**에서 입력 → 웹에서 새 기기 등록 확인 순서다.
+
+잘못된 코드, 만료, 재사용, 네트워크 중단을 각각 시험하고 기대 오류를 기록한다. 재사용 코드는 새 기기를 생성하면 안 된다. 다른 계정으로 바꾼 뒤 이전 기기가 보이거나 조작되면 중단한다. Sites의 실제 로그인/세션 만료는 별도 실환경 검증 항목이다.
+
+시험 뒤 불필요한 기기는 웹 설정에서 **등록 해제**한다. 운영 기기와 구분한 이름을 사용한다. 기기 토큰/등록 코드를 화면 캡처나 공개 이슈에 올리지 않는다.
 
 ## 8. 화면 ON 기본 연결
 
