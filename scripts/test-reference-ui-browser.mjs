@@ -115,7 +115,6 @@ try {
     state.noDevices=true;await page.reload();
     await page.getByRole('heading',{name:'나의 기기',exact:true}).waitFor();
     assert.equal(await page.locator('.device-card').count(),0);
-    assert.match(await page.locator('.player-title').innerText(),/FPS 확인 불가/);
     assert.match(await page.locator('.session-identity').innerText(),/연결 경로 확인 불가/);
     assert.equal(await page.locator('video').evaluate(v=>v.srcObject),null);
     await capture('empty-mobile-light');

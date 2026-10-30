@@ -181,9 +181,9 @@ body:has(.guest-connect) .console-grid { margin-top:32px; }
 /* Reference UI: fixed navigation, real device cards, one persistent video and control rail. */
 button { display:inline-flex; align-items:center; justify-content:center; gap:7px; }
 svg { flex-shrink:0; }
-.dashboard-shell { display:grid; grid-template-columns:168px 228px minmax(0,1fr); grid-template-rows:76px auto 1fr; gap:0; min-height:100svh; padding:0; }
+.dashboard-shell { display:grid; grid-template-columns:168px 228px minmax(0,1fr); grid-template-rows:76px 1fr; gap:0; min-height:100svh; padding:0; }
 .dashboard-shell > :where(.topbar,.workspace-title,.console-grid) { grid-column:3; width:100%; max-width:none; }
-.app-nav { grid-column:1; grid-row:1 / span 3; min-width:0; display:flex; flex-direction:column; gap:32px; position:sticky; top:0; height:100svh; padding:28px 14px 20px; border-right:1px solid var(--line); background:var(--page); }
+.app-nav { grid-column:1; grid-row:1 / span 2; min-width:0; display:flex; flex-direction:column; gap:32px; position:sticky; top:0; height:100svh; padding:28px 14px 20px; border-right:1px solid var(--line); background:var(--page); }
 .app-nav .brand-lockup { gap:8px; padding:0 4px; }
 .app-nav h1 { display:flex; flex-direction:column-reverse; align-items:flex-start; font-weight:650; }
 .app-nav .version-label { color:var(--ink); font-size:23px; line-height:1.1; letter-spacing:-.04em; margin:0; }
@@ -199,7 +199,7 @@ svg { flex-shrink:0; }
 .nav-help button { font-size:10px; padding:6px 3px; color:var(--primary); background:var(--blue-soft); }
 .nav-footer { display:grid; gap:4px; font-size:11px; color:var(--muted); padding:0 6px; }
 .nav-footer small { font-size:10px; }
-.device-panel { grid-column:2; grid-row:1 / span 3; padding:30px 16px; min-width:0; border-right:1px solid var(--line); position:sticky; top:0; height:100svh; overflow:auto; background:var(--surface); }
+.device-panel { grid-column:2; grid-row:1 / span 2; padding:30px 16px; min-width:0; border-right:1px solid var(--line); position:sticky; top:0; height:100svh; overflow:auto; background:var(--surface); }
 .device-panel-title { display:flex; justify-content:space-between; align-items:center; gap:8px; }
 .device-panel-title h2 { font-size:17px; }
 .device-panel-title h2 small { font-size:11px; margin-left:5px; color:var(--muted); font-weight:400; }
@@ -233,15 +233,15 @@ svg { flex-shrink:0; }
 .dashboard-shell .workspace-title h2 { font-size:22px; font-weight:550; letter-spacing:-.04em; }
 .dashboard-shell .workspace-title p:not(.eyebrow) { font-size:11px; }
 .dashboard-shell .workspace-title>button { display:none; }
-.dashboard-shell .console-grid { margin:0; padding:0 24px 24px; gap:20px; grid-template-columns:minmax(0,1fr) 316px; }
+.dashboard-shell .console-grid { margin:0; padding:24px; gap:20px; grid-template-columns:minmax(0,1fr) 316px; }
 .dashboard-shell .console-grid.inspector-collapsed { grid-template-columns:minmax(0,1fr); }
 .dashboard-shell .card-heading { gap:8px; margin-bottom:12px; }
 .dashboard-shell .player-title { width:100%; justify-content:space-between; }
 .dashboard-shell .screen-heading-actions { gap:5px; }
 .dashboard-shell .screen-heading-actions button { font-size:10px; padding:5px 8px; min-height:32px; }
 .dashboard-shell .device-select { display:none; }
-.dashboard-shell .screen-stage { min-height:max(360px,calc(100svh - 400px)); padding:14px; border-radius:14px; background:var(--page); border-color:var(--line); }
-.dashboard-shell .phone-view { width:min(100%,calc((100svh - 430px) * var(--video-aspect,0.46154))); border-radius:8px; background:#080e16; }
+.dashboard-shell .screen-stage { min-height:max(360px,calc(100svh - 280px)); padding:14px; border-radius:14px; background:var(--page); border-color:var(--line); }
+.dashboard-shell .phone-view { width:min(100%,calc((100svh - 310px) * var(--video-aspect,0.46154))); border-radius:8px; background:#080e16; }
 .dashboard-shell .screen-placeholder { background:var(--surface); color:var(--ink); }
 .dashboard-shell .screen-placeholder p { color:var(--muted); font-size:11px; }
 .dashboard-shell .screen-placeholder strong { font-size:14px; }
@@ -299,3 +299,7 @@ svg { flex-shrink:0; }
 .session-identity small { font-size:10px; color:var(--muted); }
 @media(max-width:760px) { .session-identity small { font-size:9px; } }
 @media(max-width:760px) { .dashboard-shell .screen-heading-actions button,.rail-mode-tabs button,.theme-toggle { min-height:44px; } .theme-toggle { width:44px; height:44px; } }
+
+/* Keep the player dominant, as in the reference: one device heading, one status. */
+.dashboard-shell .player-title { display:none; }
+.dashboard-shell .session-device { margin:0; font-size:12px; font-weight:550; letter-spacing:0; }

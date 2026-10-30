@@ -1290,7 +1290,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         <div className="device-panel-note"><UiIcon name="info" size={17}/><p>최근 응답은 원격 연결 완료와 다릅니다. 연결은 휴대폰에서 허용한 동안 유지됩니다.</p></div>
       </aside>
       <header className="topbar">
-        <div className="session-heading"><span role="status" className={`connection-pill ${connection}`}><span className="status-dot" />{phaseLabel}</span><div className="session-identity"><span className="session-device">{selectedDevice?.name ?? "연결할 기기를 선택하세요"}</span><small>{connected && metrics.path ? metrics.path === "turn" ? "중계 연결" : "직접 연결" : "연결 경로 확인 불가"} · 배터리 {Number.isFinite(selectedDevice?.batteryLevel) ? `${selectedDevice?.batteryLevel}%` : "확인 불가"}</small></div></div>
+        <div className="session-heading"><span role="status" className={`connection-pill ${connection}`}><span className="status-dot" />{phaseLabel}</span><div className="session-identity"><h2 className="session-device">{selectedDevice?.name ?? "나의 기기"}</h2><small>{connected && metrics.path ? metrics.path === "turn" ? "중계 연결" : "직접 연결" : "연결 경로 확인 불가"} · 배터리 {Number.isFinite(selectedDevice?.batteryLevel) ? `${selectedDevice?.batteryLevel}%` : "확인 불가"}</small></div></div>
         <div className="owner-area">
           <ThemeToggle />
           <div className="pc-session"><span>{pcMode === "public" ? "공용 PC 사용 중" : "개인 PC"}</span><button type="button" onClick={() => void endPublicSession()}>사용 종료</button></div>
@@ -1300,7 +1300,6 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         </div>
       </header>
 
-      <div className="workspace-title"><div><p className="eyebrow">REMOTE WORKSPACE</p><h2>{selectedDevice?.name??"나의 기기"}</h2><p>{selectedDevice?`${devicePresence} · 게임과 독서를 하나의 공간에서`:"휴대폰을 등록하고 원격 화면을 시작하세요."}</p></div><button type="button" onClick={openPairing}><UiIcon name="plus" size={16}/>새 기기 등록</button></div>
       <section className={`console-grid ${inspectorOpen?'':'inspector-collapsed'}`} aria-label="원격 조작 화면">
         <article className={`screen-card interaction-view mode-${interaction.profile.mode} ${interaction.profile.mode!=="game"&&interaction.profile.minimal?"reading-minimal":""} ${interaction.status.idle?"reading-idle":""}`} ref={viewerRef}>
 

@@ -90,7 +90,7 @@ try {
  });
  await check('offline, unknown device, API/session expiry, no devices and recovery actions',async()=>{
   state.offline=true;await page.reload();await page.getByRole('heading',{name:'Browser test phone',exact:true}).waitFor();await page.getByRole('button',{name:'연결 시작',exact:true}).first().click();await page.locator('.connection-pill').filter({hasText:'오류'}).waitFor();await screenshot('08-offline');
-  state.offline=false;state.unknownPresence=true;await page.reload();await page.getByText('상태 확인 불가 · 게임과 독서를 하나의 공간에서',{exact:true}).waitFor();
+  state.offline=false;state.unknownPresence=true;await page.reload();await page.locator('.device-card').getByText('상태 확인 불가',{exact:true}).waitFor();
   state.deviceError=401;await page.reload();await page.getByRole('alert').filter({hasText:'로그인이 만료'}).waitFor();await screenshot('09-login-expired');
   state.deviceError=null;state.noDevices=true;await page.getByRole('button',{name:'기기 목록 다시 시도',exact:true}).click();await page.getByRole('heading',{name:'나의 기기',exact:true}).waitFor();await screenshot('10-empty-devices');
  });
