@@ -135,4 +135,16 @@ class PanelPreflightTest {
             assertFalse(rig.calls.contains(PanelCommand.OFF))
         }
     }
+    @Test fun galaxyHelp255WithTruncatedDisplayDumpStillAllowsOnlyRecoveryPreflight() {
+        val rig = Rig(help("power-off", "power-reset"), 255)
+        rig.state = PanelCommandResult(0, "Display 0: INTERNAL ON\nDisplay 7: VIRTUAL mirror=0", truncated = true)
+        val report = rig.gate.checkRecovery()
+        assertTrue(report.trialReady)
+        assertTrue(report.diagnostics.contains("recovery preflight: power-reset 0"))
+        assertTrue(rig.state.displaySummary().contains("일부 조회 완료"))
+        assertFalse(rig.state.controlSucceeded) // actual power commands remain strict
+        assertEquals(listOf(PanelCommand.HELP, PanelCommand.STATE, PanelCommand.RESET), rig.calls)
+        assertFalse(rig.calls.contains(PanelCommand.OFF))
+    }
+
 }

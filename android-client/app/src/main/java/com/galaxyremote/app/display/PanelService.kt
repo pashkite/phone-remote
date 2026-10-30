@@ -79,7 +79,7 @@ class PanelService : IPanelService.Stub() {
         shellOnly(); check(!off) { "RESTORE_FIRST" }
         val inspection = preflight.inspect()
         val summary = "명령 조회 결과\n${inspection.support.summary()}\n" +
-            "화면 상태 조회: ${if (inspection.display.controlSucceeded) "완료" else "실패 (명령 조회와 별도)"}\n실제 패널 매핑·OFF 이후 복구는 미검증입니다."
+            "화면 상태 조회: ${inspection.display.displaySummary()}\n실제 패널 매핑·OFF 이후 복구는 미검증입니다."
         return wire(PanelReport(summary, inspection.diagnostics(), inspection.support.known))
     }
 

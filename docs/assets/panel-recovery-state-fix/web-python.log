@@ -1,0 +1,201 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ⛅️ wrangler 4.92.0
+───────────────────
+Generating project types...
+
+interface __BaseEnv_Env {
+	DB: D1Database;
+}
+declare namespace Cloudflare {
+	interface Env extends __BaseEnv_Env {}
+}
+interface Env extends __BaseEnv_Env {}
+
+Generating runtime types...
+
+Runtime types generated.
+
+
+✨ Types written to worker-configuration.d.ts
+
+📖 Read about runtime types
+https://developers.cloudflare.com/workers/languages/typescript/#generate-types
+📣 Remember to rerun 'wrangler types' after you change your wrangler.json file.
+
+
+  vinext build  (Vite 8.0.13)
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+[1/5] analyze client references...
+[2Ktransforming...✓ 272 modules transformed.
+rendering chunks...
+✓ built in 593ms
+[2/5] analyze server references...
+[2Ktransforming...✓ 4657 modules transformed.
+rendering chunks...
+✓ built in 2.64s
+[3/5] build rsc environment...
+[2Ktransforming...✓ 278 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 523ms
+[4/5] build client environment...
+[2Ktransforming...✓ 4665 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 2.33s
+[5/5] build ssr environment...
+[2Ktransforming...✓ 4663 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 2.39s
+[0m
+  Route (app)
+  ┌ ƒ /                          
+  ├ λ /api/build-info            
+  ├ λ /api/device/answer         
+  ├ λ /api/device/candidate      
+  ├ λ /api/device/decision       
+  ├ λ /api/device/heartbeat      
+  ├ λ /api/device/lease          
+  ├ λ /api/device/poll           
+  ├ λ /api/device/session        
+  ├ λ /api/devices               
+  ├ λ /api/devices/:id           
+  ├ λ /api/ice                   
+  ├ λ /api/pairing/complete      
+  ├ λ /api/pairing/start         
+  ├ λ /api/sessions              
+  ├ λ /api/sessions/:id          
+  ├ λ /api/sessions/:id/candidate
+  └ λ /api/sessions/:id/offer    
+
+  λ API  ƒ Dynamic
+
+  Build complete. Run `vinext start` to start the production server.
+
+Validated Sites artifact: ESM Worker default.fetch and hosting manifest are present.
+✔ session DELETE cannot erase another owner’s ICE candidates (162.21464ms)
+✔ malformed JSON field types fail as 400 instead of crashing handlers (91.073162ms)
+✔ closed device decisions never claim approval/open/rejection success (109.018823ms)
+✔ parallel invalid pairing attempts cannot bypass the 20-attempt window (438.995985ms)
+✔ real handlers complete pairing, consent, SDP, ICE, live lease and revocation in local D1 (447.91349ms)
+✔ expired or superseded pairing codes cannot register a device (67.028957ms)
+✔ changing the configured owner revokes old-owner device polling and live leases (24.654259ms)
+✔ Linro build identity is owner-authenticated, read-only and contains no credentials (0.949531ms)
+✔ brand PNGs contain valid compressed raster data and exact requested dimensions (30.470507ms)
+✔ favicon ICO contains three independently valid 16/32/48 PNG images (1.113377ms)
+✔ manifest references existing assets, branding and a scoped root entry point (15.877309ms)
+✔ Android XML parses, adaptive master paths match and package/display identities remain separate (50.542975ms)
+✔ Linro icon exports retain the approved source and clearly identify derived foreground (9.297209ms)
+✔ cancel aborts in-flight work and rejects responses from a noncompliant late fetch (19.910759ms)
+✔ request timeout is bounded and detaches its parent abort listener (20.539399ms)
+✔ a cancelled attempt cannot cancel a newer connection scope (1.806094ms)
+✔ WASD diagonal is normalized, key repeats ignored and last key-up releases joystick (1.958081ms)
+✔ multiple independent down/move/up/cancel snapshots preserve remaining pointers (0.377125ms)
+✔ single-pointer default refuses simultaneous mapping and explicit multi caps at five (0.430475ms)
+✔ move flood is coalesced into one bounded tick and terminals are immediate (2.633983ms)
+✔ hold heartbeat is bounded and timed tap/long press end without key repeat (0.315422ms)
+✔ profile/mode switch, disconnect and send failure clear all held input and auto work (0.439158ms)
+✔ standard gamepad stick/dpad/buttons map to touch and disconnect releases both (0.651766ms)
+✔ triggers and shoulders use configurable buttons; nonstandard pads never inject (0.360509ms)
+✔ reading keys, click zones, navigation modes and reverse produce bounded commands (0.535171ms)
+✔ wheel storms merge, line/page units clamp and scroll rate stays at most four per second (1.180737ms)
+✔ auto scroll explicit start/pause/resume/stop and manual input safety (0.244566ms)
+✔ auto speed and direction change are effective, error stops generation (0.191206ms)
+✔ profiles are versioned, bounded, sanitized and exclude tokens/content (2.68164ms)
+✔ mode/device/owner namespaces and saved settings remain separate; defaults do not auto-run (0.952836ms)
+✔ joystick normalization clamps coordinates and never depends on pixel resolution (0.319519ms)
+✔ oversized imports still retain all three modes within the profile resource cap (1.690961ms)
+✔ nonfinite input coordinates never turn into a center-screen tap (0.540629ms)
+✔ zoom/pan and fullscreen letterboxing use the actual transformed video rectangle (7.689912ms)
+✔ two standard sticks and custom dpad buttons map independently (0.567499ms)
+✔ wheel sensitivity changes swipe distance and reading profiles accept custom keys (0.213389ms)
+✔ editor rejects duplicates without silently dropping a mapping (1.46952ms)
+✔ editor rejects NaN, infinity, missing and out-of-range normalized coordinates (0.437545ms)
+✔ existing version 1 profiles remain valid; malformed imports warn before overwriting storage (0.829702ms)
+✔ live drag sends down immediately, bounded latest position before up, and keeps touch ID (1.601988ms)
+✔ stationary heartbeat preserves a hold and cancellation is idempotent (0.869892ms)
+✔ send failure stops timer and invokes cleanup instead of replaying a swipe (0.213049ms)
+✔ a retired queued timer cannot transmit movement after pointer release (0.125118ms)
+✔ initial send failure never starts heartbeat or fabricates a held touch (0.116334ms)
+✔ stationary drag does not flood the phone with move packets (0.109584ms)
+✔ opted-in low-latency samples at 16ms and preserves boundaries/heartbeat (0.162413ms)
+✔ detached opacity is visual-only and bounded (0.929191ms)
+✔ detached controls are available only on the main site (0.202804ms)
+✔ main site quality controls keep resolution and frame rate separate (0.245588ms)
+✔ public mode does not retain local preferences (0.134231ms)
+✔ letterbox clicks are rejected and long press reaches Android (0.145288ms)
+✔ accessibility text fallback never treats a placeholder as entered text (0.116485ms)
+✔ connection failures schedule bounded retries (0.115202ms)
+✔ intentional close suppresses reconnect and releases media (0.102794ms)
+✔ detached window listeners and timers are removed (0.203595ms)
+✔ resolution and frame rate are selected independently (0.425968ms)
+✔ coordinate helper remains the UI source of truth (0.793047ms)
+✔ portrait video rejects horizontal letterbox and maps center (0.254952ms)
+✔ landscape video rejects vertical letterbox and maps center (0.731325ms)
+✔ new bounds are used immediately after resize (0.129033ms)
+✔ drag released outside screen clamps to edge and releases pointer capture (6.582444ms)
+✔ pixel threshold preserves small drag on large displays; jitter remains a tap (1.030503ms)
+✔ secondary input cannot overwrite a drag; cancellation sends no gesture (0.503974ms)
+✔ letterbox input is ignored and stationary hold preserves long press (0.346098ms)
+✔ live-capable app receives only one tap for click jitter, with no drag stream (0.351846ms)
+✔ live drag starts only beyond 8 pixels and sends movement before release (0.796412ms)
+✔ blur during live drag cancels input and cannot turn release into a click (0.332868ms)
+✔ binary chunks preserve UUID, absolute byte offset and all byte values (3.475584ms)
+✔ diagnostics reject payloads, tokens, filenames and IPs (54.848826ms)
+✔ old app uses original commands; new app gets IDs and increasing sequence; acknowledgements are tracked (2.910668ms)
+✔ receiving requires approval and detects file corruption before download (38.226994ms)
+✔ oversized offers, out-of-order data and cancelled old chunks are rejected (61.72469ms)
+✔ approved transfers save byte-identical files and advance the queue (46.829086ms)
+✔ command timeout reports uncertainty instead of successful execution (1.092535ms)
+✔ recording streams chunks to the chosen file and finalizes on disconnect (16.549506ms)
+✔ recording write failures never report a successful save (15.89133ms)
+✔ essential touch release gets bounded headroom even when move budget is full (0.494039ms)
+✔ old app telemetry stays unknown, new telemetry expires at consumer and clears on close (0.305918ms)
+✔ pointer frame transport requires a negotiated session and uses bounded move/release budgets (0.331677ms)
+✔ closed clients reject commands and ignore retained late capability callbacks (0.146079ms)
+✔ audio startup completing after disconnect cannot send or retain an AudioContext (0.884594ms)
+✔ Alt+R/H/B map to recent apps/home/back and repeated keys do not resend (0.842551ms)
+✔ function keys, browser modifiers, IME and editable fields remain untouched (0.163926ms)
+✔ production console preserves owner access and removes temporary preview metadata (153.878982ms)
+✔ metrics use selected pair, interval loss, codec, bitrate and per-frame delays (1.995607ms)
+✔ counter reset, new RTP stream, missing stats and background gaps remain unknown (0.250825ms)
+✔ freeze requires elapsed time and resets when frames resume (0.34741ms)
+✔ auto degrades only after sustained trouble and respects minimum interval (0.785342ms)
+✔ auto restores only after 20 stable samples; no oscillation for missing/static data (0.296113ms)
+✔ thermal/encoder pressure and old clients select supported limits; stale telemetry is ignored (0.38746ms)
+✔ sender telemetry validates untrusted values and does not invent hardware status (0.259449ms)
+✔ VP8 remains baseline and H264 opt-in retains fallback (1.054509ms)
+✔ unsupported low-buffer hints do not break negotiation (0.506238ms)
+✔ a failed H264 first-frame path falls back once, never on an already visible video (0.376955ms)
+ℹ tests 94
+ℹ suites 0
+ℹ pass 94
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2531.327417
+test_missing_badging_or_certificate_is_rejected (test_apk_identity.ApkIdentityTest.test_missing_badging_or_certificate_is_rejected) ... ok
+test_signature_or_package_change_never_becomes_an_update (test_apk_identity.ApkIdentityTest.test_signature_or_package_change_never_becomes_an_update) ... ok
+test_invalid_and_empty_measurements_are_rejected (test_latency_summary.LatencySummaryTest.test_invalid_and_empty_measurements_are_rejected) ... ok
+test_tail_latency_is_not_average_or_network_rtt (test_latency_summary.LatencySummaryTest.test_tail_latency_is_not_average_or_network_rtt) ... ok
+test_actual_control_failure_stays_strict_without_alternate_command (test_panel_preflight.PreflightSafetyTest.test_actual_control_failure_stays_strict_without_alternate_command) ... ok
+test_default_is_read_only (test_panel_preflight.PreflightSafetyTest.test_default_is_read_only) ... ok
+test_explicit_probe_only_restores_fixed_display (test_panel_preflight.PreflightSafetyTest.test_explicit_probe_only_restores_fixed_display) ... ok
+test_full_help_matches_declarations_not_prose_or_prefixes (test_panel_preflight.PreflightSafetyTest.test_full_help_matches_declarations_not_prose_or_prefixes) ... ok
+test_missing_recovery_fails_closed (test_panel_preflight.PreflightSafetyTest.test_missing_recovery_fails_closed) ... ok
+test_normal_help_nonzero_status_is_recorded_not_rejected (test_panel_preflight.PreflightSafetyTest.test_normal_help_nonzero_status_is_recorded_not_rejected) ... ok
+test_power_on_firmware_is_supported (test_panel_preflight.PreflightSafetyTest.test_power_on_firmware_is_supported) ... ok
+test_unrecognized_help_blocks_recovery_probe (test_panel_preflight.PreflightSafetyTest.test_unrecognized_help_blocks_recovery_probe) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.005s
+
+OK

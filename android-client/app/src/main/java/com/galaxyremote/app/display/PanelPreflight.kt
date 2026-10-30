@@ -16,6 +16,11 @@ internal data class PanelCommandResult(
 ) {
     val controlSucceeded: Boolean get() = exitCode == 0 && !timedOut && !truncated && failure == null &&
         !Regex("(?i)unknown command|error:|exception|permission denial|permission denied").containsMatchIn(output)
+    fun displaySummary(): String = when {
+        truncated && copy(truncated = false).controlSucceeded -> "일부 조회 완료 (출력 길이 제한 · 명령 지원 검사와 별도)"
+        controlSucceeded -> "완료"
+        else -> "실패 (명령 지원 검사와 별도)"
+    }
     fun diagnostics(label: String) = "$label\nexitCode=$exitCode; timedOut=$timedOut; truncated=$truncated; failure=${failure ?: "none"}\n$output"
 }
 
