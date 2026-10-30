@@ -42,12 +42,15 @@ test('old app uses original commands; new app gets IDs and increasing sequence; 
  control.message({type:'ack',v:1,id:m.id,status:'completed'});assert.match(snapshot.result,/처리 완료/);
  assert.doesNotMatch(client.diagnostics.export(),/한글|abc/);client.close();
 });
-test('receiving requires approval and detects file corruption before download',async()=>{
- const channel=new Channel();let offer;let status;const files=new FileTransfer(channel,s=>status=s,o=>offer=o);
+test('receiving requires approval and detects file corruption before download',async t=>{
+ const channel=new Channel();let offer;let status;const files=new FileTransfer(channel,s=>status=s,o=>offer=o);t.after(()=>files.close());
  const payload=new TextEncoder().encode('한글🙂\nbytes').buffer;
  channel.message({v:1,type:'offer',id,name:'../../test.txt',size:payload.byteLength,hash:await sha256(payload)});await tick();assert.ok(offer);assert.ok(!offer.name.includes('/'));assert.equal(channel.sent.length,0);
  files.accept();const bad=payload.slice(0);new Uint8Array(bad)[0]^=1;
- channel.message(encodeChunk(id,0,bad));channel.message({v:1,type:'end',id});await tick();assert.match(status,/중단/);assert.equal(JSON.parse(channel.sent.at(-1)).type,'cancel');files.close();
+ channel.message(encodeChunk(id,0,bad));channel.message({v:1,type:'end',id});
+ // SHA-256 completes asynchronously; a fixed 15ms sleep races under parallel build load.
+ const deadline=performance.now()+2000;while(!status?.includes('중단')&&performance.now()<deadline)await tick();
+ assert.match(status,/중단/);assert.equal(JSON.parse(channel.sent.at(-1)).type,'cancel');files.close();
 });
 test('oversized offers, out-of-order data and cancelled old chunks are rejected',async()=>{
  const channel=new Channel();let status;const files=new FileTransfer(channel,s=>status=s,()=>{});

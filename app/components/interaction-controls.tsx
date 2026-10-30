@@ -7,6 +7,7 @@ export default function InteractionControls({control,personal,connected,focusVie
   const binding=p.bindings.find(m=>m.id===control.selectedBinding);
   const updateBinding=(patch:Partial<NonNullable<typeof binding>>)=>update({bindings:p.bindings.map(m=>m.id===control.selectedBinding?{...m,...patch}:m)});
   return <section className="interaction-controls" aria-label="모드별 조작 설정">
+    {control.notice&&/중복|좌표는|실패|손상|읽을 수 없|형식/.test(control.notice)&&<p role="alert" className="interaction-alert">{control.notice}</p>}
     <div className="interaction-mode-tabs" role="group" aria-label="사용 모드">{([['game','게임'],['novel','소설'],['webtoon','웹툰']] as const).map(([mode,label])=><button key={mode} type="button" aria-pressed={p.mode===mode} onClick={()=>control.selectMode(mode as InteractionMode)}>{label}</button>)}</div>
     <div className="interaction-row"><label>프로필<select value={p.id} onChange={e=>control.selectProfile(e.target.value)}>{control.store.profiles.filter(v=>v.mode===p.mode).map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label><button type="button" onClick={control.addProfile} disabled={control.store.profiles.length>=12}>새 프로필</button><button type="button" disabled={!connected} onClick={focusViewer}>화면 입력 활성화</button></div>
     <p className="interaction-note">{personal?"개인 PC: 계정·기기별 로컬 저장":"공용 PC: 이번 세션에서만 사용"} · 보호된 화면/DRM 앱은 캡처가 제한될 수 있습니다.</p>
@@ -17,12 +18,15 @@ export default function InteractionControls({control,personal,connected,focusVie
       <label><input type="checkbox" checked={p.lookStick.enabled} onChange={e=>update({lookStick:{...p.lookStick,enabled:e.target.checked}})}/> 오른쪽 스틱 → 시점 터치 (실험)</label>
       <p className="interaction-note">{status.pad} · Android 네이티브 게임패드가 아닙니다. 매핑 입력은 새 Android 앱이 필요합니다.</p>
       <button type="button" aria-pressed={control.editing} onClick={()=>control.setEditing(!control.editing)}>{control.editing?'편집 종료 · 플레이':'키 매핑 편집'}</button>
-      {control.editing&&<fieldset><legend>편집 중에는 원격 입력 중지 · 화면 클릭으로 위치 선택</legend>
+      <button type="button" aria-pressed={control.showMappings} onClick={()=>control.setShowMappings(!control.showMappings)}>{control.showMappings?'매핑 숨김':'매핑 표시'}</button>
+      {control.editing&&<fieldset><legend>편집 중 원격 입력 중지 · 마커 드래그/방향키 또는 화면 클릭</legend>
         <label>대상<select value={control.selectedBinding} onChange={e=>control.setSelectedBinding(e.target.value)}><option value="joystick">이동 조이스틱 중심</option><option value="look">오른쪽 스틱 중심</option>{p.bindings.map(m=><option key={m.id} value={m.id}>{m.key}</option>)}</select></label>
         <button type="button" disabled={p.bindings.length>=32} onClick={()=>{const key=Array.from('FGHJKLQERTYUIOPZXCVBNM').map(k=>`Key${k}`).find(k=>!p.bindings.some(m=>m.key===k));if(key)update({bindings:[...p.bindings,{id:`new-${Date.now()}`,key,x:.8,y:.5,size:.08,action:'hold'}]});}}>버튼 추가</button>
         {binding&&<><label>키 할당<input aria-label="매핑 키 할당" value={binding.key} readOnly onKeyDown={e=>{e.preventDefault();if(!e.altKey&&!e.ctrlKey&&!e.metaKey&&isButtonKey(e.code))updateBinding({key:e.code});}}/></label>
           <label>마우스/패드 코드<select aria-label="매핑 코드" value={/^(Mouse|Pad)/.test(binding.key)?binding.key:""} onChange={e=>{if(e.target.value)updateBinding({key:e.target.value});}}><option value="">키보드 지정란 사용</option>{['Mouse0','Mouse1','Mouse2','Mouse3','Mouse4',...Array.from({length:17},(_,i)=>`Pad${i}`)].map(k=><option key={k} value={k}>{k}</option>)}</select></label>
           <label>동작<select value={binding.action} onChange={e=>updateBinding({action:e.target.value as typeof binding.action})}><option value="hold">누르는 동안 유지</option><option value="tap">짧게 누르기</option><option value="longPress">650ms 길게 누르기</option></select></label>
+          <label>X 좌표<input aria-label="매핑 X 좌표" type="number" min="0" max="1" step="0.01" value={binding.x} onChange={e=>updateBinding({x:e.target.valueAsNumber})}/></label>
+          <label>Y 좌표<input aria-label="매핑 Y 좌표" type="number" min="0" max="1" step="0.01" value={binding.y} onChange={e=>updateBinding({y:e.target.valueAsNumber})}/></label>
           <label>버튼 크기<input type="range" min="0.03" max="0.25" step="0.01" value={binding.size} onChange={e=>updateBinding({size:Number(e.target.value)})}/></label>
           <button type="button" onClick={()=>update({bindings:p.bindings.filter(m=>m.id!==binding.id)})}>버튼 삭제</button></>}
         <label>조이스틱 반경<input type="range" min="0.02" max="0.2" step="0.01" value={p.joystick.radius} onChange={e=>update({joystick:{...p.joystick,radius:Number(e.target.value)}})}/></label>
@@ -30,7 +34,9 @@ export default function InteractionControls({control,personal,connected,focusVie
         <label>아날로그 감도<input type="range" min="0.25" max="3" step="0.05" value={p.sensitivity} onChange={e=>update({sensitivity:Number(e.target.value)})}/></label>
       </fieldset>}
     </>:<>
-      <div className="interaction-row" data-auto-control="true"><button type="button" disabled={!connected} onClick={()=>{focusViewer();control.engine.startAuto();}}>자동 스크롤 시작</button><button type="button" disabled={!connected} onClick={()=>{focusViewer();if(status.auto==='paused')control.engine.resumeAuto();else control.engine.pauseAuto();}}>{status.auto==='paused'?'재개':'일시정지'}</button><button type="button" onClick={()=>control.engine.stopAuto()}>중지</button><output aria-live="polite">{status.auto}</output></div>
+      <div className="interaction-row" data-auto-control="true"><button type="button" disabled={!connected} onClick={()=>{focusViewer();control.engine.startAuto();}}>자동 스크롤 시작</button><button type="button" disabled={!connected} onClick={()=>{focusViewer();if(status.auto==='paused')control.engine.resumeAuto();else control.engine.pauseAuto();}}>{status.auto==='paused'?'재개':'일시정지'}</button><button type="button" onClick={()=>control.engine.stopAuto()}>중지</button><output aria-live="polite" data-state={status.auto}>{{stopped:"중지됨",running:"실행 중",paused:"일시정지됨"}[status.auto]??status.auto}</output></div>
+      <div className="interaction-row"><button type="button" disabled={!connected} onClick={()=>{focusViewer();control.engine.time(performance.now());control.engine.key(p.reading.previousKey,true);control.engine.key(p.reading.previousKey,false);}}>이전 페이지</button><button type="button" disabled={!connected} onClick={()=>{focusViewer();control.engine.time(performance.now());control.engine.key(p.reading.nextKey,true);control.engine.key(p.reading.nextKey,false);}}>다음 페이지</button></div>
+      <p className="interaction-note">자동 스크롤은 반복 스와이프입니다. 현재 독서 진도나 페이지 위치는 알 수 없습니다.</p>
       <details><summary>독서 조작 설정</summary>
       <label>탐색 방식<select value={p.reading.navigation} onChange={e=>reading({navigation:e.target.value as typeof p.reading.navigation})}><option value="vertical">세로 스와이프</option><option value="horizontal">좌우 페이지 스와이프</option><option value="tap">좌우 탭 넘김</option></select></label>
       <label>휠 감도<input type="range" min="0.25" max="3" step="0.05" value={p.reading.speed} onChange={e=>reading({speed:Number(e.target.value)})}/></label>
@@ -45,11 +51,14 @@ export default function InteractionControls({control,personal,connected,focusVie
       <label>왼쪽 영역 경계<input type="range" min="0.05" max="0.45" step="0.05" value={p.reading.leftZone} onChange={e=>reading({leftZone:Number(e.target.value)})}/></label>
       <label>오른쪽 영역 경계<input type="range" min="0.55" max="0.95" step="0.05" value={p.reading.rightZone} onChange={e=>reading({rightZone:Number(e.target.value)})}/></label>
       </details>
-      <label>표시 확대 {Math.round(p.zoom*100)}%<input type="range" min="0.5" max="3" step="0.05" value={p.zoom} onChange={e=>{update({zoom:Number(e.target.value)});control.setPan({x:0,y:0});}}/></label>
-      <button type="button" onClick={()=>{update({zoom:1});control.setPan({x:0,y:0});}}>창에 맞춤</button>
-      <label><input type="checkbox" checked={p.minimal} onChange={e=>update({minimal:e.target.checked})}/> 도구·커서 자동 숨김</label>
       <p className="interaction-note">확대는 영상 표시 크기만 바꿉니다. 확대 후 Shift+드래그로 표시 이동. Page Up/Down·방향키·Space로 탐색합니다. 앱의 정확한 페이지/스크롤 위치는 알 수 없습니다.</p>
     </>}
+      <label>표시 확대 {Math.round(p.zoom*100)}%<input type="range" min="0.5" max="3" step="0.05" value={p.zoom} onChange={e=>{update({zoom:Number(e.target.value)});control.setPan({x:0,y:0});}}/></label>
+      <button type="button" onClick={()=>{update({zoom:1});control.setPan({x:0,y:0});}}>창에 맞춤</button>
+      {p.mode!=='game'&&<label><input type="checkbox" checked={p.minimal} onChange={e=>update({minimal:e.target.checked})}/> 도구·커서 자동 숨김</label>}
+
+    <button type="button" onClick={control.save}>프로필 저장</button>
+    {control.notice&&<p className="interaction-note" role="status">{control.notice}</p>}
     <details><summary>프로필 · 화질 · 도움말</summary>
       <label>이름<input value={p.name} maxLength={48} onChange={e=>update({name:e.target.value})}/></label>
       <p>권장: 게임 저지연/가능 시 60fps, 소설·웹툰 선명도/30fps. 현재 화질을 기본적으로 유지합니다. 저장 화질은 직접 적용하거나 아래 선택 시 적용 옵션을 사용하세요.</p>

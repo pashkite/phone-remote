@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { createPortal } from "react-dom";
 import { normalizedVideoPoint } from "./remote-geometry";
 import ThemeToggle from "./components/theme-toggle";
@@ -72,6 +73,7 @@ const controls = [
 ];
 
 async function responseError(response: Response, fallback: string) {
+  if(response.status===401)return "로그인이 만료되었습니다. 사용 종료 후 다시 로그인하세요.";
   try {
     const payload = (await response.json()) as { error?: string };
     return payload.error || fallback;
@@ -81,10 +83,15 @@ async function responseError(response: Response, fallback: string) {
 }
 
 export default function RemoteConsole({ displayName, email, signOutPath }: RemoteConsoleProps) {
+  const [inspectorOpen,setInspectorOpen]=useState(true);
+  const [phase,setPhase]=useState("연결 전");
+  const [pairClock,setPairClock]=useState(0);
   const [connection, setConnection] = useState<ConnectionState>("offline");
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [deviceLoadError,setDeviceLoadError]=useState<string|null>(null);
   const [devices, setDevices] = useState<RegisteredDevice[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const pairingBaseline=useRef(new Set<string>());
   const [pairing, setPairing] = useState<PairingInfo | null>(null);
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingError, setPairingError] = useState<string | null>(null);
@@ -219,7 +226,11 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     () => devices.find((device) => device.id === selectedDeviceId) ?? devices[0] ?? null,
     [devices, selectedDeviceId],
   );
+  useEffect(()=>{if(dialog!=="pair"||!pairing)return;const timer=setInterval(()=>setPairClock(Date.now()),1000);return()=>clearInterval(timer);},[dialog,pairing]);
   const connected = connection === "connected";
+  const phaseLabel=connectionError?"오류":phase;
+  const online=Boolean(selectedDevice?.online&&selectedDevice.lastSeenAt&&Date.now()-selectedDevice.lastSeenAt<45_000);
+  const devicePresence=online?"최근 응답 있음":selectedDevice?.online===false?"오프라인":"상태 확인 불가";
   const waiting = connection === "waiting";
   const interaction = useInteraction({ owner: email, device: selectedDeviceId, personal: pcMode === "personal", connected, blocked: Boolean(dialog),
     client: toolsClient, send: sendPayload, viewer: viewerRef, detached: detachedWindow,
@@ -258,7 +269,10 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const loadDevices = useCallback(async () => {
     try {
       const response = await fetch("/api/devices", { cache: "no-store" });
-      if (!response.ok) return false;
+      if (!response.ok) {
+        setDeviceLoadError(response.status===401?"로그인이 만료되었습니다. 사용 종료 후 다시 로그인하세요.":"기기 목록을 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.");return false;
+      }
+      setDeviceLoadError(null);
       const payload = (await response.json()) as { devices?: RegisteredDevice[] };
       const nextDevices = payload.devices ?? [];
       setDevices(nextDevices);
@@ -267,9 +281,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           ? current
           : nextDevices[0]?.id ?? null,
       );
-      return nextDevices.length > 0;
+      return nextDevices;
     } catch {
-      return false;
+      setDeviceLoadError("기기 목록을 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.");return false;
     }
   }, []);
 
@@ -322,6 +336,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     setToolsClient(null);
     setVolumeKnown(false);
     const sessionId = sessionIdRef.current;
+    if(intentional&&sessionId)setPhase("연결 종료");
     sessionIdRef.current = null;
     if (channelRef.current) {
       channelRef.current.onopen = null;
@@ -445,6 +460,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }, [detachedWindow]);
 
   function openPairing() {
+    pairingBaseline.current=new Set(devices.map(d=>d.id));
     setDialog("pair");
     setPairingError(null);
     void createPairingCode();
@@ -456,22 +472,22 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     try {
       const response = await fetch("/api/pairing/start", { method: "POST" });
       if (!response.ok) throw new Error(await responseError(response, "등록 코드를 만들지 못했습니다."));
-      setPairing((await response.json()) as PairingInfo);
+      setPairing((await response.json()) as PairingInfo);setPairClock(Date.now());
     } catch (error) {
-      setPairingError(error instanceof Error ? error.message : "등록 코드를 만들지 못했습니다.");
+      setPairing(null);setPairingError(error instanceof Error ? error.message : "등록 코드를 만들지 못했습니다.");
     } finally {
       setPairingBusy(false);
     }
   }
 
   async function verifyPairing() {
-    const hasDevice = await loadDevices();
-    if (hasDevice) {
+    const loadedDevices = await loadDevices();
+    if (loadedDevices && loadedDevices.some(d=>!pairingBaseline.current.has(d.id))) {
       setDialog(null);
       setToast("휴대폰 등록이 완료됐어요.");
       return;
     }
-    setPairingError("아직 등록된 휴대폰이 없습니다. 앱에 코드를 입력한 뒤 다시 확인해 주세요.");
+    setPairingError("새로 등록된 휴대폰이 확인되지 않았습니다. 앱에 코드를 입력한 뒤 다시 확인해 주세요.");
   }
 
   async function removeDevice(device: RegisteredDevice) {
@@ -575,9 +591,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         setDialog("settings");
         return;
       }
-      if (!selectedDevice.online) {
+      if (!online) {
         setConnectionError("휴대폰 앱에서 ‘연결 요청 알림’을 켠 뒤 다시 시도해 주세요.");
-        setToast("현재 휴대폰이 오프라인이에요.");
+        setToast("기기 상태를 확인할 수 없어요. 앱을 열고 네트워크와 알림을 확인하세요.");
         return;
       }
 
@@ -587,6 +603,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       await closeConnection(true, false);
       setConnection("waiting");
       setConnectionError(null);
+      setPhase("연결 요청 중");
       setConnectionHint("휴대폰으로 승인 알림을 보내는 중이에요.");
 
       let codecNegotiationFailed = false;
@@ -653,19 +670,21 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         peer.onconnectionstatechange = () => {
           if (peerRef.current !== peer || sessionIdRef.current !== sessionId) return;
           if (peer.connectionState === "connected") {
-            if (answerPollRef.current) window.clearInterval(answerPollRef.current);
-            answerPollRef.current = null;
             setConnectionError(null);
             setConnectionHint(null);
             reconnectAttemptsRef.current = 0;
             startStats(peer);
             if (channelRef.current?.readyState === "open") {
+              if (answerPollRef.current) window.clearInterval(answerPollRef.current);
+              answerPollRef.current=null;
               setConnection("connected");
+              setPhase("연결됨");
               setToast("휴대폰과 안전하게 연결됐어요.");
             }
           } else if (["failed", "closed"].includes(peer.connectionState) && !intentionalCloseRef.current) {
             queueReconnect("영상 연결이 끊겼습니다.");
           } else if (peer.connectionState === "disconnected" && !intentionalCloseRef.current) {
+            setConnection("reconnecting");setPhase("재연결 중");
             setConnectionHint("네트워크 복구를 기다리는 중이에요.");
           }
         };
@@ -678,11 +697,13 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         channel.onopen = () => {
           if (peerRef.current !== peer || sessionIdRef.current !== sessionId) return;
           tools.opened();
-          setConnection("connected");
-          setConnectionError(null);
-          setConnectionHint(null);
-          reconnectAttemptsRef.current = 0;
-          setToast("휴대폰과 안전하게 연결됐어요.");
+          if(peer.connectionState==="connected"){
+            if (answerPollRef.current) window.clearInterval(answerPollRef.current);
+            answerPollRef.current=null;
+            setConnection("connected");setPhase("연결됨");
+            setConnectionError(null);setConnectionHint(null);reconnectAttemptsRef.current=0;
+            setToast("휴대폰과 안전하게 연결됐어요.");
+          }
           sendPayload({ type: "quality", shortEdge: resolutionRef.current, fps: frameRateRef.current });
           startStats(peer);
         };
@@ -706,6 +727,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           body: JSON.stringify(peer.localDescription.toJSON()),
         });
         if (!offerResponse.ok) throw new Error(await responseError(offerResponse, "휴대폰으로 연결 요청을 보내지 못했습니다."));
+        setPhase("기기 응답 대기");
         setConnectionHint("휴대폰 알림에서 승인 또는 거절을 선택해 주세요.");
         setToast("휴대폰으로 연결 승인 알림을 보냈어요.");
 
@@ -734,10 +756,13 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               diagnostics.record("connection_request", { state });
               lastState = state;
               if (state === "consent_pending") {
+                setPhase("화면 공유 승인 대기");
                 setConnectionHint("휴대폰의 Android 화면 공유 확인창을 승인해 주세요.");
               } else if (state === "offer_ready") {
+                setPhase("WebRTC 협상 중");
                 setConnectionHint("승인 완료 · 보안 연결을 만드는 중이에요.");
               } else if (state === "answer_ready") {
+                setPhase("WebRTC 협상 중");
                 setConnectionHint("화면 스트림을 여는 중이에요.");
               }
             }
@@ -803,7 +828,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     const delay = Math.min(8_000, 1_000 * (2 ** (attempt - 1)));
     reconnectTimerRef.current = -1;
     void closeConnection(false, false).then(() => {
-      setConnection("reconnecting");
+      setConnection("reconnecting");setPhase("재연결 중");
       setConnectionError(null);
       setConnectionHint(`${reason} ${Math.round(delay / 1000)}초 후 재연결합니다. (${attempt}/4)`);
       reconnectTimerRef.current = window.setTimeout(() => {
@@ -1057,7 +1082,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     if(interaction.editing){const point=normalizedPointer(event,targetVideo);if(point.inside)interaction.pick(point.x,point.y);event.preventDefault();return;}
     if(!connected||dialog)return;
     interaction.engine.manual();interaction.engine.time(performance.now());
-    if(p.mode!=="game"&&p.zoom>1&&event.shiftKey){
+    if(p.zoom>1&&event.shiftKey){
       event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);
       modePointersRef.current.set(event.pointerId,{kind:"pan",x:event.clientX,y:event.clientY,target:event.currentTarget});return;
     }
@@ -1200,9 +1225,9 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     <main className="remote-shell">
       <header className="topbar">
         <div className="brand-lockup">
-          <div className="orbit-mark" aria-hidden="true"><span /></div>
-          <div><h1>Galaxy Remote <span className="version-label">v0.5.3</span></h1></div>
-          <span className={`connection-pill ${connection}`}><span className="status-dot" />{connected ? "연결됨" : connection === "reconnecting" ? "재연결 중" : waiting ? "승인 대기" : "연결 준비"}</span>
+          <Image unoptimized className="brand-symbol" src="/brand/symbol.svg" width="32" height="32" alt="" />
+          <div><h1>Galaxy Remote <span className="version-label">2.0</span></h1></div>
+          <span role="status" className={`connection-pill ${connection}`}><span className="status-dot" />{phaseLabel}</span>
         </div>
         <div className="owner-area">
           <ThemeToggle />
@@ -1213,12 +1238,13 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         </div>
       </header>
 
-      <section className="console-grid" aria-label="원격 조작 화면">
+      <div className="workspace-title"><div><p className="eyebrow">YOUR REMOTE SPACE</p><h2>{selectedDevice?.name??"나의 기기"}</h2><p>{selectedDevice?`${devicePresence} · 게임과 독서를 하나의 공간에서`:"휴대폰을 등록하고 원격 화면을 시작하세요."}</p></div><button type="button" onClick={openPairing}>+ 새 기기 등록</button></div>
+      <section className={`console-grid ${inspectorOpen?'':'inspector-collapsed'}`} aria-label="원격 조작 화면">
         <article className={`screen-card interaction-view mode-${interaction.profile.mode} ${interaction.profile.mode!=="game"&&interaction.profile.minimal?"reading-minimal":""} ${interaction.status.idle?"reading-idle":""}`} ref={viewerRef}>
-          <InteractionControls control={interaction} personal={pcMode==="personal"} connected={connected} focusViewer={focusInteractionViewer}/>
-          <p className="interaction-note">모드: {interaction.profile.mode==="game"?"게임":interaction.profile.mode==="novel"?"소설":"웹툰"} · 모드 전환은 연결을 유지합니다.</p>
+
           <div className="card-heading">
-            <div><p className="eyebrow">LIVE SCREEN</p><h2>휴대폰 화면</h2></div>
+            <div className="player-title"><span className={`live-badge ${connected?"active":""}`}>{phaseLabel}</span><span>{metrics.fps===null?"FPS 확인 불가":`${metrics.fps} fps`}</span></div>
+            <div className="interaction-mode-tabs" role="group" aria-label="빠른 모드 전환">{([['game','게임'],['novel','소설'],['webtoon','웹툰']] as const).map(([mode,label])=><button type="button" key={mode} aria-pressed={interaction.profile.mode===mode} onClick={()=>interaction.selectMode(mode)}>{label}</button>)}</div>
             <div className="screen-heading-actions">
               <select
                 className="device-select"
@@ -1228,52 +1254,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               >
                 {devices.length ? devices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>) : <option value="">등록된 기기 없음</option>}
               </select>
-              <details className="display-settings"><summary>화면 설정</summary><div className="display-settings-panel">
-              <label>품질 모드<select aria-label="영상 품질 모드" value={qualityMode} onChange={event => {
-                const mode = event.target.value as QualityMode;
-                modeRef.current = mode; setQualityMode(mode); adaptiveRef.current.reset();
-                const preset = mode === "auto" || mode === "custom" ? QUALITY_PRESETS.balanced : QUALITY_PRESETS[mode];
-                resolutionRef.current = preset.edge; frameRateRef.current = preset.fps;
-                setResolution(preset.edge); setFrameRate(preset.fps);
-                if (connected) sendPayload({ type: "quality", shortEdge: preset.edge, fps: preset.fps });
-              }}>
-                {Object.entries(QUALITY_PRESETS).map(([key, value]) => <option key={key} value={key} disabled={key === "stable" && connected && !toolsRef.current?.supports("quality720")}>{value.label} · {value.edge}p/{value.fps}fps</option>)}
-                <option value="auto">자동 · 네트워크에 따라 조절</option><option value="custom">사용자 지정</option>
-              </select></label>
-              <label>연결 코덱<select aria-label="영상 코덱" disabled={connected || waiting} value={codecMode} onChange={event => {
-                setCodecMode(event.target.value); codecRef.current = event.target.value; codecFallbackRef.current = false;
-              }}><option value="vp8">VP8 · 기본</option><option value="h264">H.264 우선 · VP8 fallback (실험)</option></select></label>
-              <label>해상도<select
-                className="quality-select"
-                aria-label="화면 해상도"
-                value={resolution}
-                onChange={(event) => changeResolution(Number(event.target.value) as ResolutionSetting)}
-              >
-                <option value={540}>540p</option>
-                <option value={720} disabled={connected && !toolsRef.current?.supports("quality720")}>720p</option>
-                <option value={1080}>1080p</option>
-                <option value={1440}>1440p</option>
-              </select></label><label>초당 프레임<select
-                className="quality-select"
-                aria-label="화면 프레임"
-                value={frameRate}
-                onChange={(event) => changeFrameRate(Number(event.target.value) as FrameRateSetting)}
-              >
-                <option value={24}>24fps</option>
-                <option value={30}>30fps</option>
-                <option value={60}>60fps</option>
-              </select></label><label>분리 창 투명도<select
-                className="quality-select"
-                aria-label="분리 창 투명도"
-                title="분리 창 투명도"
-                value={detachedOpacity}
-                onChange={(event) => setDetachedOpacity(Number(event.target.value))}
-              >
-                <option value={25}>투명도 25%</option>
-                <option value={50}>투명도 50%</option>
-                <option value={75}>투명도 75%</option>
-                <option value={100}>투명도 100%</option>
-              </select></label></div></details>
+
               <button className="viewer-button" type="button" title="화질을 낮추고 화면 갱신을 늘려 반응 속도를 우선합니다." onClick={() => {
                 modeRef.current = "custom"; setQualityMode("custom");
                 resolutionRef.current = 540; frameRateRef.current = 60;
@@ -1285,14 +1266,16 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 {detachedWindow ? "화면 창 닫기" : "화면 분리"}
               </button>
               <button className="viewer-button" type="button" onClick={() => void toggleFullscreen()}>전체화면</button>
-              <span className={`live-badge ${connected ? "active" : ""}`}><span /> {connected ? "LIVE" : "OFFLINE"}</span>
+              <button className="viewer-button" type="button" onClick={()=>{interaction.update({zoom:1});interaction.setPan({x:0,y:0});}}>화면 맞춤</button>
+              <button className="viewer-button" type="button" aria-expanded={inspectorOpen} aria-controls="player-inspector" onClick={()=>setInspectorOpen(!inspectorOpen)}>{inspectorOpen?"패널 숨김":"패널 열기"}</button>
+              <button className="viewer-button" type="button" disabled={!connected&&!waiting&&connection!=="reconnecting"} onClick={()=>setDialog("disconnect")}>종료</button>
             </div>
           </div>
           <div className="screen-stage">
             <div
               className={`phone-view ${videoAspectRatio > 1 ? "is-landscape" : "is-portrait"} ${connected ? "is-live" : ""}`}
               ref={phoneViewRef}
-              style={{ aspectRatio: videoAspectRatio }}
+              style={{ aspectRatio: videoAspectRatio, "--video-aspect":videoAspectRatio } as React.CSSProperties}
               tabIndex={connected ? 0 : -1}
               role="application"
               aria-label="연결된 휴대폰 원격 화면"
@@ -1307,14 +1290,14 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             >
               <video
                 ref={videoRef}
-                style={interaction.profile.mode!=="game"?{transform:`translate(${interaction.pan.x}px, ${interaction.pan.y}px) scale(${interaction.profile.zoom})`}:undefined}
+                style={{transform:`translate(${interaction.pan.x}px, ${interaction.pan.y}px) scale(${interaction.profile.zoom})`}}
                 autoPlay
                 playsInline
                 aria-label="연결된 휴대폰 화면"
                 onLoadedMetadata={(event) => syncVideoAspectRatio(event.currentTarget)}
                 onResize={(event) => syncVideoAspectRatio(event.currentTarget)}
               />
-              {interaction.editing&&<InteractionOverlay profile={interaction.profile} selected={interaction.selectedBinding} video={videoRef} host={phoneViewRef}/>}
+              {interaction.profile.mode==="game"&&(interaction.editing||interaction.showMappings)&&<InteractionOverlay profile={interaction.profile} selected={interaction.selectedBinding} video={videoRef} host={phoneViewRef} editing={interaction.editing} onMove={interaction.moveMapping} onSelect={interaction.setSelectedBinding} pan={interaction.pan}/>}
               <input
                 ref={keyboardRef}
                 disabled={interaction.editing}
@@ -1361,7 +1344,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 autoPlay
                 muted
                 playsInline
-                style={{ opacity: detachedOpacity / 100, transform: interaction.profile.mode!=="game"?`translate(${interaction.pan.x}px, ${interaction.pan.y}px) scale(${interaction.profile.zoom})`:undefined }}
+                style={{ opacity: detachedOpacity / 100, transform: `translate(${interaction.pan.x}px, ${interaction.pan.y}px) scale(${interaction.profile.zoom})` }}
                 aria-label="분리된 휴대폰 화면"
                 onCanPlay={(event) => { void event.currentTarget.play(); }}
                 onLoadedMetadata={(event) => {
@@ -1390,20 +1373,69 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           detachedWindow.document.body,
         )}
 
-        <aside className="control-rail" aria-label="원격 제어 도구">
+        <aside id="player-inspector" className="control-rail" aria-label="원격 제어 도구" hidden={!inspectorOpen}>
+          <details className="control-card inspector-section" open><summary>조작 및 프로필</summary><InteractionControls control={interaction} personal={pcMode==="personal"} connected={connected} focusViewer={focusInteractionViewer}/></details>
+          <section className="control-card quality-card">              <details className="display-settings"><summary>화질 및 화면</summary><div className="display-settings-panel">
+              <label>품질 모드<select aria-label="영상 품질 모드" value={qualityMode} onChange={event => {
+                const mode = event.target.value as QualityMode;
+                modeRef.current = mode; setQualityMode(mode); adaptiveRef.current.reset();
+                const preset = mode === "auto" || mode === "custom" ? QUALITY_PRESETS.balanced : QUALITY_PRESETS[mode];
+                resolutionRef.current = preset.edge; frameRateRef.current = preset.fps;
+                setResolution(preset.edge); setFrameRate(preset.fps);
+                if (connected) sendPayload({ type: "quality", shortEdge: preset.edge, fps: preset.fps });
+              }}>
+                {Object.entries(QUALITY_PRESETS).map(([key, value]) => <option key={key} value={key} disabled={key === "stable" && connected && !toolsRef.current?.supports("quality720")}>{value.label} · {value.edge}p/{value.fps}fps</option>)}
+                <option value="auto">자동 · 네트워크에 따라 조절</option><option value="custom">사용자 지정</option>
+              </select></label>
+              <label>연결 코덱<select aria-label="영상 코덱" disabled={connected || waiting} value={codecMode} onChange={event => {
+                setCodecMode(event.target.value); codecRef.current = event.target.value; codecFallbackRef.current = false;
+              }}><option value="vp8">VP8 · 기본</option><option value="h264">H.264 우선 · VP8 fallback (실험)</option></select></label>
+              <p className="interaction-note">{codecFallbackRef.current?"VP8 fallback으로 재연결 중/사용 중":"VP8 기본 · H.264는 선택형 실험"} · 실제 코덱은 통계에서 확인하세요.</p>
+              <label>해상도<select
+                className="quality-select"
+                aria-label="화면 해상도"
+                value={resolution}
+                onChange={(event) => changeResolution(Number(event.target.value) as ResolutionSetting)}
+              >
+                <option value={540}>540p</option>
+                <option value={720} disabled={connected && !toolsRef.current?.supports("quality720")}>720p</option>
+                <option value={1080}>1080p</option>
+                <option value={1440}>1440p</option>
+              </select></label><label>초당 프레임<select
+                className="quality-select"
+                aria-label="화면 프레임"
+                value={frameRate}
+                onChange={(event) => changeFrameRate(Number(event.target.value) as FrameRateSetting)}
+              >
+                <option value={24}>24fps</option>
+                <option value={30}>30fps</option>
+                <option value={60}>60fps</option>
+              </select></label><label>분리 창 투명도<select
+                className="quality-select"
+                aria-label="분리 창 투명도"
+                title="분리 창 투명도"
+                value={detachedOpacity}
+                onChange={(event) => setDetachedOpacity(Number(event.target.value))}
+              >
+                <option value={25}>투명도 25%</option>
+                <option value={50}>투명도 50%</option>
+                <option value={75}>투명도 75%</option>
+                <option value={100}>투명도 100%</option>
+              </select></label></div></details></section>
           <section className="control-card connect-card">
-            <p className="eyebrow">REMOTE CONTROL</p><h2>원격 제어</h2>
+            <p className="eyebrow">CONNECTION</p><h2>{phaseLabel}</h2>
+            {deviceLoadError&&<div role="alert"><p>{deviceLoadError}</p><button type="button" onClick={()=>void loadDevices()}>기기 목록 다시 시도</button></div>}
             <p>{connectionError ?? connectionHint ?? (waiting ? "휴대폰 응답을 기다리고 있어요." : connected ? "암호화된 연결을 사용하고 있어요." : selectedDevice ? "자동 연결 준비 상태이면 바로 연결됩니다. 그 외에는 휴대폰에서 승인해 주세요." : "먼저 휴대폰을 등록해 주세요.")}</p>
             <button className="primary-action" type="button" onClick={() => { if (selectedDevice) void beginConnection(); else openPairing(); }} aria-busy={waiting || connection === "reconnecting"}>
               {waiting || connection === "reconnecting" ? <><span className="spinner" /> {connection === "reconnecting" ? "재연결 중 · 다시 시도" : "승인 대기 · 다시 시도"}</> : connected ? "연결 새로고침" : selectedDevice ? (connectionError ? "재연결" : "연결 시작") : "기기 등록"}
             </button>
             <div className="device-row">
-              <span className={`status-dot ${selectedDevice?.online ? "online" : ""}`} /><strong>{selectedDevice?.name ?? "등록된 기기 없음"}</strong>
-              <span>{selectedDevice ? `${selectedDevice.online ? "온라인" : "오프라인"}${selectedDevice.batteryLevel !== null ? ` · ${selectedDevice.batteryLevel}%` : ""}` : "미등록"}</span>
+              <span className={`status-dot ${online ? "online" : ""}`} /><strong>{selectedDevice?.name ?? "등록된 기기 없음"}</strong>
+              <span>{selectedDevice ? `${devicePresence}${Number.isFinite(selectedDevice.batteryLevel) ? ` · ${selectedDevice.batteryLevel}%` : " · 배터리 확인 불가"}` : "미등록"}</span>
             </div>
           </section>
 
-          {!selectedDevice && <section className="control-card setup-guide"><h3>처음 연결하나요?</h3><ol><li><strong>휴대폰에 앱 설치</strong><p>‘기기 등록’을 열어 설치 파일을 받으세요.</p></li><li><strong>6자리 코드 입력</strong><p>휴대폰 앱에 웹에서 만든 코드를 입력하세요.</p></li><li><strong>연결 준비</strong><p>앱에서 조작 권한과 연결 요청 알림을 켜세요. 원격 키보드는 선택 사항입니다.</p></li></ol></section>}
+          {!selectedDevice && <section className="control-card setup-guide"><h3>처음 연결하나요?</h3><ol><li><strong>휴대폰에 앱 설치</strong><p>‘기기 등록’에서 설치 및 권한 안내를 확인하세요.</p></li><li><strong>6자리 코드 입력</strong><p>휴대폰 앱에 웹에서 만든 코드를 입력하세요.</p></li><li><strong>연결 준비</strong><p>앱에서 조작 권한과 연결 요청 알림을 켜세요. 원격 키보드는 선택 사항입니다.</p></li></ol></section>}
           {selectedDevice && <>
           <section className="control-card quick-card">
             <div className="section-title-row"><h3>빠른 제어</h3><span>{connected ? "사용 가능" : "연결 후 사용"}</span></div>
@@ -1426,28 +1458,35 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             <div className="volume-label"><strong>볼륨 설정</strong><span aria-hidden="true">◖))</span></div>
             <button type="button" disabled={!connected} aria-label="볼륨 낮추기" onClick={() => changeVolume(volume - 5)}>−</button>
             <input type="range" min="0" max="100" value={volume} disabled={!connected} aria-label="휴대폰 볼륨 설정" aria-valuetext={connected && volumeKnown ? `${volume}%` : "아직 볼륨을 설정하지 않음"} onChange={(event) => changeVolume(Number(event.target.value))} style={{ "--volume": `${volume}%` } as React.CSSProperties} />
-            <output>{connected && volumeKnown ? `${volume}%` : "—"}</output><button type="button" disabled={!connected} aria-label="볼륨 높이기" onClick={() => changeVolume(volume + 5)}>+</button>
+            <output>{connected && volumeKnown ? `${volume}%` : "확인 불가"}</output><button type="button" disabled={!connected} aria-label="볼륨 높이기" onClick={() => changeVolume(volume + 5)}>+</button>
           </section>
 
-          {connected && <details className="control-card connection-details"><summary>상세 연결 정보</summary>          <div className="metrics-card" aria-label="연결 정보">
-            <div className="metric"><span className="metric-icon">↔</span><small>경로</small><strong>{connected ? metrics.path === "turn" ? "중계" : metrics.path === "direct" ? "직접" : "확인 중" : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">▮▮▮</span><small>네트워크 RTT</small><strong>{connected && metrics.latency !== null ? `${metrics.latency} ms` : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">HD</span><small>해상도</small><strong>{connected && metrics.width && metrics.height ? `${metrics.width}×${metrics.height}` : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">▶</span><small>프레임</small><strong>{connected && metrics.fps !== null ? `${metrics.fps} fps` : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">⇣</span><small>비트레이트</small><strong>{connected && metrics.bitrateKbps !== null ? `${metrics.bitrateKbps} kbps` : "—"}</strong></div>
-            <div className="metric"><span className="metric-icon">%</span><small>손실</small><strong>{connected && metrics.packetLoss !== null ? `${metrics.packetLoss}%` : "—"}</strong></div>
+          {connected && <details className="control-card connection-details"><summary>스트리밍 통계</summary>          <div className="metrics-card" aria-label="연결 정보">
+            <div className="metric"><span className="metric-icon">↔</span><small>경로</small><strong>{connected ? metrics.path === "turn" ? "중계" : metrics.path === "direct" ? "직접" : "확인 불가" : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">▮▮▮</span><small>네트워크 RTT</small><strong>{connected && metrics.latency !== null ? `${metrics.latency} ms` : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">HD</span><small>해상도</small><strong>{connected && metrics.width && metrics.height ? `${metrics.width}×${metrics.height}` : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">▶</span><small>프레임</small><strong>{connected && metrics.fps !== null ? `${metrics.fps} fps` : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">⇣</span><small>비트레이트</small><strong>{connected && metrics.bitrateKbps !== null ? `${metrics.bitrateKbps} kbps` : "확인 불가"}</strong></div>
+            <div className="metric"><span className="metric-icon">%</span><small>손실</small><strong>{connected && metrics.packetLoss !== null ? `${metrics.packetLoss}%` : "확인 불가"}</strong></div>
           </div>
 
             <p>RTT는 입력부터 화면 표시까지의 종단 지연이 아닙니다. 종단 지연: 미측정.</p>
             <p>코덱: {metrics.codec ?? "확인 불가"} · 디코딩: {metrics.decodeMs === null ? "확인 불가" : `${metrics.decodeMs.toFixed(1)} ms/프레임`} · 지터 버퍼: {metrics.jitterMs === null ? "확인 불가" : `${metrics.jitterMs.toFixed(1)} ms`}</p>
-            <p>구간 드롭: {metrics.dropped ?? "확인 불가"} · {metrics.stalled ? "새 프레임 없음 (정지 화면일 수도 있음)" : "프레임 정지 미감지"} · 입력 전송 대기: {metrics.bufferedBytes} bytes</p>
+            <p>구간 드롭: {metrics.dropped ?? "확인 불가"} · {metrics.stalled ? "새 프레임 없음 (정지 화면일 수도 있음)" : metrics.fps===null?"새 프레임 상태 확인 불가":"프레임 정지 미감지"} · 입력 전송 대기: {metrics.bufferedBytes} bytes</p>
             <p>Android 캡처/송신 FPS: {senderMetrics?.captureFps?.toFixed(1) ?? "확인 불가"} / {senderMetrics?.sendFps?.toFixed(1) ?? "확인 불가"} · 송신: {senderMetrics?.sendKbps?.toFixed(0) ?? "확인 불가"} kbps</p>
             <p>인코딩: {senderMetrics?.encodeMs?.toFixed(1) ?? "확인 불가"} ms/프레임 · 인코더: {senderMetrics?.encoder ?? "확인 불가"} · 전력 효율 인코더 지표: {senderMetrics?.hardwareEncoder === null || !senderMetrics ? "확인 불가" : String(senderMetrics.hardwareEncoder)}</p>
-            <p>적용 제한: {senderMetrics?.configuredEdge ?? "—"}p/{senderMetrics?.configuredFps ?? "—"}fps · RTP 제한 수락: {senderMetrics?.rtpLimitsApplied === null || !senderMetrics ? "확인 불가" : String(senderMetrics.rtpLimitsApplied)} · 열 상태: {senderMetrics?.thermal ?? "확인 불가"} · 품질 모드: {qualityMode === "auto" ? "자동" : "수동 (기기 안전 제한은 적용)"}</p>
+            <p>적용 제한: {senderMetrics?.configuredEdge && senderMetrics?.configuredFps ? `${senderMetrics.configuredEdge}p/${senderMetrics.configuredFps}fps` : "확인 불가"} · RTP 제한 수락: {senderMetrics?.rtpLimitsApplied === null || !senderMetrics ? "확인 불가" : String(senderMetrics.rtpLimitsApplied)} · 열 상태: {senderMetrics?.thermal ?? "확인 불가"} · 품질 모드: {qualityMode === "auto" ? "자동" : "수동 (기기 안전 제한은 적용)"}</p>
 
 </details>}
-          <button className="disconnect-button" type="button" disabled={!connected && !waiting} onClick={() => setDialog("disconnect")}>연결 해제</button>
+          <button className="disconnect-button" type="button" disabled={!connected && !waiting && connection!=="reconnecting"} onClick={() => setDialog("disconnect")}>연결 해제</button>
           </>}
+          <details className="control-card safety-info"><summary>화면 OFF 실험 · 미검증</summary>
+            <p>웹에서는 화면 OFF를 실행하지 않습니다. 물리 패널 OFF·캡처 유지·복구는 갤럭시 실기기에서 미검증입니다.</p>
+            <dl><dt>Shizuku 실행/승인</dt><dd>웹에서 확인 불가</dd><dt>디스플레이 지원/패널 상태</dt><dd>웹에서 확인 불가</dd><dt>시험/자동 복구 결과</dt><dd>미검증</dd></dl>
+            <ol><li>테스트 앱에서 Shizuku 사용자 승인과 사전 검사를 확인하세요.</li><li>실제 패널의 display ID와 외부 복구 경로를 먼저 검증하세요.</li><li>복구 ON 명령이 실제 작동한 뒤 앱의 제한 시간 시험을 사용하세요.</li><li>연결 종료 후 패널을 확인하세요. 앱의 복구 요청은 실제 복구 성공을 보장하지 않습니다.</li></ol>
+            <p>복구 경로가 검증되지 않았으면 시험하지 마세요. MediaProjection 중단, 잠금, 앱 강제 종료 시 외부 복구가 필요할 수 있습니다. 웹의 ‘잠금’은 패널 OFF 실험과 다릅니다.</p>
+          </details>
+          <details className="control-card"><summary>연결 도움말</summary><p>휴대폰에서 접근성 조작 권한·화면 공유·알림을 확인하세요. 앱과 PC의 네트워크를 확인한 뒤 다시 연결하세요.</p><p>직접 연결이 차단되고 TURN이 설정되지 않았다면 다른 네트워크에서 시도하세요. 이 사이트는 유료 중계를 자동으로 추가하지 않습니다.</p><button type="button" onClick={()=>setDialog("settings")}>기기 관리 열기</button></details>
           <section className="privacy-note"><span className="shield" aria-hidden="true">◇</span><div><strong>휴대폰에서 허용한 동안만 연결해요</strong><p>일반 연결은 휴대폰에서 승인합니다. 앱에서 자동 연결을 준비한 동안에는 추가 승인 없이 연결됩니다. 영상과 키 입력은 서버에 저장하지 않습니다.</p></div></section>
         </aside>
       </section>
@@ -1457,22 +1496,13 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           <section ref={modalRef} tabIndex={-1} className="modal" role="dialog" aria-modal="true" aria-labelledby="pair-title" onMouseDown={(event) => event.stopPropagation()}>
             <button className="modal-close" type="button" aria-label="닫기" onClick={() => setDialog(null)}>×</button>
             <p className="eyebrow">DEVICE PAIRING</p><h2 id="pair-title">갤럭시를 등록해 주세요</h2>
-            <p>Galaxy Remote 앱을 연 다음 아래 6자리 코드를 입력하면 이 계정에 안전하게 등록됩니다.</p>
+            <p>Galaxy Remote 2.0 앱을 연 다음 아래 6자리 코드를 입력하면 이 계정에 안전하게 등록됩니다.</p>
             <h3>1. 휴대폰에 앱 설치</h3>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.3-release.apk" download>
-              <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote v0.5.3 받기</strong>
-              <small>새 기능 7종 · 기존 서명키 사용 · 실제 휴대폰 설치 검증 전</small>
-            </a>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.5-rotation-fixed-release.apk" download>
-              <span aria-hidden="true">↓</span>
-              <strong>기존 Galaxy Remote v0.4.5 받기</strong>
-              <small>Galaxy arm64 v0.4.5 · 15MB · 화면 회전·입력 안내 문구 오인식 수정</small>
-            </a>
-            <details className="install-help"><summary>기존 앱을 업데이트하나요?</summary><p>v0.5.3은 v0.4.5와 같은 서명키로 만들었습니다. 기존 앱을 삭제하지 않고 설치한 뒤 등록 기기와 설정이 유지되는지 확인해 주세요. 실제 갤럭시에서 업데이트 설치와 새 기능 검증은 아직 진행되지 않았습니다.</p></details>
+            <p className="install-warning">2.0 시험 앱은 아직 공개 배포하지 않았습니다. 전달받은 테스트 APK를 설치하세요. 기존 앱은 삭제하지 마세요.</p>
+            <details className="install-help"><summary>기존 앱을 업데이트하나요?</summary><p>업데이트 전 기존 앱과 시험 APK의 서명이 같은지 확인하세요. 기존 앱을 삭제하지 않고 설치한 뒤 등록 기기와 설정이 유지되는지 확인해 주세요. 실제 갤럭시에서 업데이트 설치와 새 기능 검증은 아직 진행되지 않았습니다.</p></details>
             <h3>2. 앱에 등록 코드 입력</h3>
             <div className="pair-code-panel">
-              {pairingBusy ? <span className="pair-code-loading"><span className="spinner blue" /> 코드 만드는 중</span> : pairing ? <><strong>{pairing.code.slice(0, 3)} {pairing.code.slice(3)}</strong><small>10분 동안 한 번만 사용할 수 있어요.</small></> : <span>코드를 만들지 못했습니다.</span>}
+              {pairingBusy ? <span className="pair-code-loading"><span className="spinner blue" /> 코드 만드는 중</span> : pairing ? <><strong>{pairing.code.slice(0, 3)} {pairing.code.slice(3)}</strong><small>{(pairClock||Date.now())>=pairing.expiresAt?"코드가 만료되었습니다. 새 코드를 만드세요.":`남은 시간 ${Math.max(0,Math.ceil((pairing.expiresAt-(pairClock||Date.now()))/60000))}분 · 한 번만 사용 가능`}</small></> : <span>코드를 만들지 못했습니다.</span>}
             </div>
             {pairingError && <p className="modal-error" role="alert">{pairingError}</p>}
             <h3>3. 연결 준비</h3><p>앱에서 조작 권한과 연결 요청 알림을 켜세요. 원격 키보드는 선택 사항입니다.</p>
@@ -1487,7 +1517,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       {dialog === "disconnect" && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setDialog(null)}>
           <section ref={modalRef} tabIndex={-1} className="modal compact" role="alertdialog" aria-modal="true" aria-labelledby="disconnect-title" onMouseDown={(event) => event.stopPropagation()}>
-            <h2 id="disconnect-title">원격 연결을 해제할까요?</h2><p>휴대폰 화면 전송과 모든 원격 조작이 즉시 중지됩니다.</p>
+            <h2 id="disconnect-title">원격 연결을 해제할까요?</h2><p>원격 영상과 입력을 종료합니다. 화면 OFF 실험 중이었다면 휴대폰의 실제 패널 복구 여부를 확인하세요.</p>
             <div className="modal-actions"><button type="button" onClick={() => setDialog(null)}>취소</button><button className="danger" type="button" onClick={() => { void closeConnection(); setDialog(null); setToast("연결을 안전하게 해제했습니다."); }}>연결 해제</button></div>
           </section>
         </div>
@@ -1507,22 +1537,13 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             <div className="registered-device-list">
               {devices.length ? devices.map((device) => (
                 <div className="registered-device" key={device.id}>
-                  <span className={`status-dot ${device.online ? "online" : ""}`} />
-                  <div><strong>{device.name}</strong><small>{device.online ? "온라인" : "오프라인"} · {device.appVersion}</small></div>
+                  <span className={`status-dot ${device.online&&device.lastSeenAt&&Date.now()-device.lastSeenAt<45_000 ? "online" : ""}`} />
+                  <div><strong>{device.name}</strong><small>{device.online&&device.lastSeenAt&&Date.now()-device.lastSeenAt<45_000 ? "최근 응답 있음" : device.online===false?"오프라인":"상태 확인 불가"} · {device.appVersion}</small></div>
                   <button type="button" onClick={() => void removeDevice(device)} disabled={removingDeviceId === device.id}>{removingDeviceId === device.id ? "해제 중" : "등록 해제"}</button>
                 </div>
               )) : <div className="empty-device-list">등록된 기기가 없습니다.</div>}
             </div>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.5.3-release.apk" download>
-              <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote v0.5.3 받기</strong>
-              <small>기존 서명키 사용 · 실제 휴대폰 설치 검증 전</small>
-            </a>
-            <a className="android-project-link" href="/downloads/GalaxyRemote-0.4.5-rotation-fixed-release.apk" download>
-              <span aria-hidden="true">↓</span>
-              <strong>Galaxy Remote v0.4.5 받기</strong>
-              <small>v0.4.0·v0.4.1 위에 바로 설치할 수 있습니다.</small>
-            </a>
+            <p className="install-warning">2.0 시험 앱은 아직 공개 배포하지 않았습니다. 전달받은 테스트 APK를 설치하세요. 기존 앱은 삭제하지 마세요.</p>
           </section>
         </div>
       )}
