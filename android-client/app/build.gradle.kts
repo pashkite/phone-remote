@@ -33,6 +33,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        aidl = true
     }
 
     packaging {
@@ -41,6 +42,9 @@ android {
     }
 
     buildTypes {
+        configureEach {
+            buildConfigField("boolean", "DISPLAY_CONTROL_EXPERIMENTAL", "false")
+        }
         debug {
             // GitHub's Android 16 emulator is x86_64. Debug binaries are only
             // used by the automated projection smoke test.
@@ -56,6 +60,15 @@ android {
             // Keep WebRTC/JNI class names and bytecode untouched while the
             // sideload build is validated across recent Galaxy firmware.
             isMinifyEnabled = false
+        }
+        create("panelTest") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".paneltest"
+            versionNameSuffix = "-panel-experiment"
+            matchingFallbacks += "debug"
+            ndk.abiFilters.clear()
+            ndk.abiFilters += "arm64-v8a"
+            buildConfigField("boolean", "DISPLAY_CONTROL_EXPERIMENTAL", "true")
         }
     }
 
@@ -78,6 +91,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("io.github.webrtc-sdk:android:144.7559.09")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+    testImplementation("junit:junit:4.13.2")
 
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

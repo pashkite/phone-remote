@@ -67,6 +67,7 @@ class RemoteControlService : Service() {
     }
 
     override fun onDestroy() {
+        com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
         if (!shuttingDown) shuttingDown = true
         preferences.standbyActive = false
         candidatePollFuture?.cancel(true)
@@ -203,6 +204,7 @@ class RemoteControlService : Service() {
                 onAnswerReady = ::submitAnswer,
                 onLocalCandidate = ::submitCandidate,
                 onConnectionState = { isConnected, message ->
+                    com.galaxyremote.app.display.DisplayControl.sessionConnected(isConnected)
                     connected = isConnected
                     sendStatus(message, true)
                     updateNotification(message, isConnected)
@@ -455,6 +457,7 @@ class RemoteControlService : Service() {
     private fun shutdown(message: String) {
         if (shuttingDown) return
         shuttingDown = true
+        com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
         preferences.standbyActive = false
         sendStatus(message, false)
         candidatePollFuture?.cancel(true)
@@ -467,6 +470,7 @@ class RemoteControlService : Service() {
     private fun finishRemoteSession(message: String) {
         if (shuttingDown || finishingSession) return
         finishingSession = true
+        com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
         candidatePollFuture?.cancel(false)
         candidatePollFuture = null
         leaseFuture?.cancel(false); leaseFuture = null

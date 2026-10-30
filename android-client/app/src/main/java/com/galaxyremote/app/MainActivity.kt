@@ -194,6 +194,13 @@ class MainActivity : AppCompatActivity() {
         standbyButton = findViewById(R.id.standbyButton)
 
         findViewById<Button>(R.id.remoteToolsButton).setOnClickListener { openRemoteTools() }
+        if (BuildConfig.DISPLAY_CONTROL_EXPERIMENTAL) {
+            val parent = findViewById<Button>(R.id.remoteToolsButton).parent as android.view.ViewGroup
+            parent.addView(Button(this).apply {
+                text = "물리 패널 OFF 실험 (미검증)"
+                setOnClickListener { startActivity(Intent(this@MainActivity, com.galaxyremote.app.display.PanelExperimentActivity::class.java)) }
+            })
+        }
         pairButton.setOnClickListener { pairDevice() }
         accessibilityButton.setOnClickListener { openAccessibilitySettings() }
         keyboardButton.setOnClickListener { configureRemoteKeyboard() }
