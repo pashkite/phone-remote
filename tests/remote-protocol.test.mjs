@@ -17,6 +17,7 @@ const {FileTransfer}=await import(pathToFileURL(path.join(tmp,'files.mjs')));
 class Channel {
  readyState='open';bufferedAmount=0;sent=[];onmessage=null;
  send(data){this.sent.push(data);}
+ close(){this.readyState='closed';}
  message(data){this.onmessage?.({data:typeof data==='object'&&!(data instanceof ArrayBuffer)?JSON.stringify(data):data});}
 }
 const tick=()=>new Promise(r=>setTimeout(r,15));
@@ -121,4 +122,17 @@ test('pointer frame transport requires a negotiated session and uses bounded mov
  channel.bufferedAmount=3000;assert.equal(client.sendPointerFrame([{...point,phase:'move'}]),false);assert.equal(client.sendPointerFrame([{...point,phase:'up'}]),true);
  const second=JSON.parse(channel.sent.at(-1));assert.equal(second.pointerSeq,2);assert.equal(client.sendPointerFrame(Array(6).fill(point)),false);
  client.close();assert.equal(client.inputSessionId,null);
+});
+
+test('closed clients reject commands and ignore retained late capability callbacks',()=>{
+ const channel=new Channel();let opened=0;const client=new RemoteClient(channel,{createDataChannel(){opened++;return new Channel();}},()=>null,()=>null);
+ const late=channel.onmessage;client.close();
+ assert.equal(client.send({type:'global',action:'home'}),false);
+ late({data:JSON.stringify({type:'capabilities',v:1,features:['commandAck','files','pcmAudio']})});
+ assert.equal(client.supports('files'),false);assert.equal(opened,0);client.close();
+});
+test('audio startup completing after disconnect cannot send or retain an AudioContext',async t=>{
+ const old=globalThis.AudioContext;t.after(()=>{if(old===undefined)delete globalThis.AudioContext;else globalThis.AudioContext=old;});let resume;let closed=0;
+ globalThis.AudioContext=class {destination={};createGain(){return {connect(){},gain:{value:1}};}createMediaStreamDestination(){return {stream:{getAudioTracks:()=>[]}};}resume(){return new Promise(r=>resume=r);}close(){closed++;return Promise.resolve();}};
+ const channel=new Channel(),client=new RemoteClient(channel,{createDataChannel(){return new Channel();}},()=>null,()=>null);const starting=client.toggleAudio();client.close();resume();await assert.rejects(starting,/연결 종료/);assert.equal(channel.sent.length,0);assert.equal(closed,1);
 });

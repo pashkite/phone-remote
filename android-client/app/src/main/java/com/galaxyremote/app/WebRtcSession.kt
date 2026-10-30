@@ -80,7 +80,7 @@ class WebRtcSession(
     private lateinit var surfaceTextureHelper: SurfaceTextureHelper
     private lateinit var videoSource: VideoSource
     private lateinit var videoTrack: VideoTrack
-    private var peerConnection: PeerConnection? = null
+    @Volatile private var peerConnection: PeerConnection? = null
     private var controlChannel: DataChannel? = null
     private var fileChannel: DataChannel? = null
     private var audioChannel: DataChannel? = null
@@ -91,7 +91,7 @@ class WebRtcSession(
         failed = { code -> sendJson(JSONObject().put("type", "audioState").put("state", "failed").put("code", code)) },
     )
     private var videoSender: RtpSender? = null
-    private var pendingSessionId: String? = null
+    @Volatile private var pendingSessionId: String? = null
     private val answerDelivered = AtomicBoolean(false)
     private var remoteDescriptionSet = false
     private val pendingRemoteCandidates = mutableListOf<IceCandidate>()
@@ -187,12 +187,13 @@ class WebRtcSession(
         preferences.markNativeStage("answer-set-remote-sdp")
         peer.setRemoteDescription(
             SimpleSdpObserver(
-                onSuccess = {
+                onSuccess = success@{
+                    if (peerConnection !== peer || pendingSessionId != sessionId) return@success
                     remoteDescriptionSet = true
                     flushPendingRemoteCandidates(peer)
                     createAnswer(peer, sessionId)
                 },
-                onFailure = { error -> onConnectionState(false, "PC 연결 요청을 읽지 못했습니다: $error") },
+                onFailure = { error -> if (peerConnection === peer && pendingSessionId == sessionId) onConnectionState(false, "PC 연결 요청을 읽지 못했습니다: $error") },
             ),
             SessionDescription(SessionDescription.Type.OFFER, offerSdp),
         )
@@ -374,6 +375,7 @@ class WebRtcSession(
     }
 
     private fun createAnswer(peer: PeerConnection, sessionId: String) {
+        if (peerConnection !== peer || pendingSessionId != sessionId) return
         preferences.markNativeStage("answer-create-local-sdp")
         val constraints = MediaConstraints().apply {
             mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"))
@@ -381,7 +383,8 @@ class WebRtcSession(
         }
         peer.createAnswer(
             SimpleSdpObserver(
-                onCreateSuccess = { answer ->
+                onCreateSuccess = created@{ answer ->
+                    if (peerConnection !== peer || pendingSessionId != sessionId) return@created
                     preferences.markNativeStage("answer-set-local-sdp")
                     peer.setLocalDescription(
                         SimpleSdpObserver(
@@ -389,12 +392,12 @@ class WebRtcSession(
                                 preferences.markNativeStage("answer-trickle-ready")
                                 emitAnswer(peer, sessionId)
                             },
-                            onFailure = { error -> onConnectionState(false, "연결 응답을 만들지 못했습니다: $error") },
+                            onFailure = { error -> if (peerConnection === peer && pendingSessionId == sessionId) onConnectionState(false, "연결 응답을 만들지 못했습니다: $error") },
                         ),
                         answer,
                     )
                 },
-                onFailure = { error -> onConnectionState(false, "연결 응답을 만들지 못했습니다: $error") },
+                onFailure = { error -> if (peerConnection === peer && pendingSessionId == sessionId) onConnectionState(false, "연결 응답을 만들지 못했습니다: $error") },
             ),
             constraints,
         )
@@ -518,6 +521,10 @@ class WebRtcSession(
                 PeerConnection.IceConnectionState.CONNECTED,
                 PeerConnection.IceConnectionState.COMPLETED,
                 -> onConnectionState(true, "PC와 암호화된 연결이 완료됐어요.")
+                PeerConnection.IceConnectionState.DISCONNECTED -> {
+                    com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
+                    RemoteAccessibilityService.stopTouch()
+                }
                 PeerConnection.IceConnectionState.FAILED,
                 PeerConnection.IceConnectionState.CLOSED,
                 -> onConnectionState(false, "PC 연결이 종료됐습니다. 새 요청을 기다릴게요.")
@@ -536,6 +543,10 @@ class WebRtcSession(
                         preferences.markNativeStage("streaming")
                         onConnectionState(true, "PC와 암호화된 연결이 완료됐어요.")
                     }
+                PeerConnection.PeerConnectionState.DISCONNECTED -> {
+                    com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
+                    RemoteAccessibilityService.stopTouch()
+                }
                 PeerConnection.PeerConnectionState.FAILED,
                 PeerConnection.PeerConnectionState.CLOSED,
                 -> onConnectionState(false, "PC 연결이 종료됐습니다. 새 요청을 기다릴게요.")

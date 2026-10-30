@@ -97,5 +97,5 @@ export class PcmPlayer {
     this.next = Math.max(this.next, ctx.currentTime + .02);
     source.start(this.next); this.next += buffer.duration;
   }
-  close() { void this.context?.close(); this.context = null; this.destination = null; this.gain = null; }
+  close() { void this.context?.close().catch(() => {}); this.context = null; this.destination = null; this.gain = null; }
 }

@@ -10,6 +10,7 @@ import type { InteractionEngine } from "../lib/interaction/engine";
 import InteractionControls from "./components/interaction-controls";
 import InteractionOverlay from "./components/interaction-overlay";
 import RemoteTools from "./components/remote-tools";
+import { ConnectionScope, boundedFetch } from "../lib/remote/connection-scope";
 import { LiveTouchSender } from "../lib/remote/live-touch";
 import { RemoteClient } from "../lib/remote/client";
 import { Diagnostics } from "../lib/remote/diagnostics";
@@ -141,6 +142,10 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   const previousStatsRef = useRef<{ bytes: number; at: number } | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number; at: number; pointerId: number; target: HTMLDivElement; clientX: number; clientY: number; moved: boolean } | null>(null);
   const livePointerRef = useRef<{ sender: LiveTouchSender; cleanup: () => void } | null>(null);
+  const attemptRef=useRef<ConnectionScope|null>(null);
+  const connectionDeviceRef=useRef<string|null>(null);
+  const negotiationTimerRef=useRef<number|null>(null);
+  const activeOwnerRef=useRef(email);
   const connectionStartingRef = useRef(false);
   const composingRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -266,36 +271,6 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     [displayName],
   );
 
-  const loadDevices = useCallback(async () => {
-    try {
-      const response = await fetch("/api/devices", { cache: "no-store" });
-      if (!response.ok) {
-        setDeviceLoadError(response.status===401?"로그인이 만료되었습니다. 사용 종료 후 다시 로그인하세요.":"기기 목록을 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.");return false;
-      }
-      setDeviceLoadError(null);
-      const payload = (await response.json()) as { devices?: RegisteredDevice[] };
-      const nextDevices = payload.devices ?? [];
-      setDevices(nextDevices);
-      setSelectedDeviceId((current) =>
-        current && nextDevices.some((device) => device.id === current)
-          ? current
-          : nextDevices[0]?.id ?? null,
-      );
-      return nextDevices;
-    } catch {
-      setDeviceLoadError("기기 목록을 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.");return false;
-    }
-  }, []);
-
-  useEffect(() => {
-    const initialTimer = window.setTimeout(() => void loadDevices(), 0);
-    const timer = window.setInterval(() => void loadDevices(), 5_000);
-    return () => {
-      window.clearTimeout(initialTimer);
-      window.clearInterval(timer);
-    };
-  }, [loadDevices]);
-
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 2_800);
@@ -303,6 +278,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }, [toast]);
 
   const stopTimers = useCallback(() => {
+    if (negotiationTimerRef.current) window.clearTimeout(negotiationTimerRef.current);
+    negotiationTimerRef.current=null;
     if (answerPollRef.current) window.clearInterval(answerPollRef.current);
     if (statsTimerRef.current) window.clearInterval(statsTimerRef.current);
     if (textFlushTimerRef.current) window.clearTimeout(textFlushTimerRef.current);
@@ -316,6 +293,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   }, []);
 
   const closeConnection = useCallback(async (notifyServer = true, intentional = true) => {
+    attemptRef.current?.cancel();attemptRef.current=null;connectionStartingRef.current=false;
+    connectionDeviceRef.current=null;
     diagnostics.record("connection", { state: "closed" });
     intentionalCloseRef.current = intentional;
     if (intentional && reconnectTimerRef.current) {
@@ -324,6 +303,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       reconnectAttemptsRef.current = 0;
     }
     interactionEngineRef.current?.cancel("연결 종료");
+    for(const [id,pointer] of modePointersRef.current)if(pointer.target.hasPointerCapture(id))pointer.target.releasePointerCapture(id);
+    modePointersRef.current.clear();
     stopTimers();
     livePointerRef.current?.sender.finish("cancel");
     livePointerRef.current?.cleanup();
@@ -336,7 +317,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     setToolsClient(null);
     setVolumeKnown(false);
     const sessionId = sessionIdRef.current;
-    if(intentional&&sessionId)setPhase("연결 종료");
+    if(intentional)setPhase("연결 종료");
     sessionIdRef.current = null;
     if (channelRef.current) {
       channelRef.current.onopen = null;
@@ -363,13 +344,53 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     setMetrics({ ...EMPTY_VIDEO_METRICS });
     setSenderMetrics(null);
     if (notifyServer && sessionId) {
-      await fetch(`/api/sessions/${sessionId}`, { method: "DELETE", keepalive: true }).catch(() => {
+      await boundedFetch(`/api/sessions/${sessionId}`, { method: "DELETE", keepalive: true }, 3000).catch(() => {
         // Local media and control resources are already closed even if the
         // best-effort server cleanup cannot reach the network.
       });
     }
   }, [stopTimers, diagnostics]);
 
+  const loadDevices = useCallback(async () => {
+    try {
+      const response = await boundedFetch("/api/devices", { cache: "no-store" });
+      if (!response.ok) {
+        if(response.status===401){void closeConnection(false,true);setDevices([]);setSelectedDeviceId(null);setConnectionError("로그인이 만료되었습니다. 다시 로그인하세요.");}
+        setDeviceLoadError(response.status===401?"로그인이 만료되었습니다. 사용 종료 후 다시 로그인하세요.":"기기 목록을 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.");return false;
+      }
+      setDeviceLoadError(null);
+      const payload = (await response.json()) as { devices?: RegisteredDevice[] };
+      const nextDevices = payload.devices ?? [];
+      if(connectionDeviceRef.current&&!nextDevices.some(d=>d.id===connectionDeviceRef.current))void closeConnection(false,true);
+      setDevices(nextDevices);
+      setSelectedDeviceId((current) =>
+        current && nextDevices.some((device) => device.id === current)
+          ? current
+          : nextDevices[0]?.id ?? null,
+      );
+      return nextDevices;
+    } catch {
+      setDeviceLoadError("기기 목록을 불러오지 못했습니다. 네트워크를 확인하고 다시 시도하세요.");return false;
+    }
+  }, [closeConnection]);
+
+  useEffect(() => {
+    const initialTimer = window.setTimeout(() => void loadDevices(), 0);
+    const timer = window.setInterval(() => void loadDevices(), 5_000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
+  }, [loadDevices]);
+
+  useEffect(()=>{
+    if(activeOwnerRef.current!==email){activeOwnerRef.current=email;void closeConnection(false,true);}
+  },[email,closeConnection]);
+  useEffect(()=>{
+    const hide=()=>{void closeConnection(true,true);if(detachedWindow&&!detachedWindow.closed)detachedWindow.close();};
+    window.addEventListener("pagehide",hide);
+    return()=>window.removeEventListener("pagehide",hide);
+  },[closeConnection,detachedWindow]);
   useEffect(() => () => { void closeConnection(false, true); }, [closeConnection]);
 
   useEffect(() => {
@@ -580,6 +601,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   async function beginConnection() {
     if (connectionStartingRef.current) return;
     connectionStartingRef.current = true;
+    let scope:ConnectionScope|null=null;
     try {
       if (!selectedDevice) {
         openPairing();
@@ -600,7 +622,14 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
       intentionalCloseRef.current = false;
-      await closeConnection(true, false);
+      void closeConnection(true, false);
+      scope=new ConnectionScope();attemptRef.current=scope;connectionDeviceRef.current=selectedDevice.id;
+      connectionStartingRef.current=true;
+      const current=scope;
+      negotiationTimerRef.current=window.setTimeout(()=>{
+        if(attemptRef.current!==current)return;
+        setConnectionError("휴대폰 연결 준비 시간이 초과되었습니다. 권한과 네트워크를 확인하고 다시 시도하세요.");void closeConnection(true,true);
+      },65000);
       setConnection("waiting");
       setConnectionError(null);
       setPhase("연결 요청 중");
@@ -609,18 +638,20 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
       let codecNegotiationFailed = false;
       try {
         const [sessionResponse, iceResponse] = await Promise.all([
-          fetch("/api/sessions", {
+          current.fetch("/api/sessions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ deviceId: selectedDevice.id }),
           }),
-          fetch("/api/ice", { cache: "no-store" }),
+          current.fetch("/api/ice", { cache: "no-store" }),
         ]);
+        current.check();
         if (!sessionResponse.ok) throw new Error(await responseError(sessionResponse, "연결을 시작하지 못했습니다."));
         if (!iceResponse.ok) throw new Error(await responseError(iceResponse, "네트워크 설정을 불러오지 못했습니다."));
 
         const { sessionId } = (await sessionResponse.json()) as { sessionId: string };
         const { iceServers } = (await iceResponse.json()) as { iceServers: RTCIceServer[] };
+        current.check();
         diagnostics.record("connection_request", { state: "created" });
         sessionIdRef.current = sessionId;
 
@@ -655,7 +686,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           const candidate = event.candidate;
           if (!candidate) return;
           const payload = candidate.toJSON();
-          void fetch(`/api/sessions/${sessionId}/candidate`, {
+          void current.fetch(`/api/sessions/${sessionId}/candidate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -675,6 +706,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             reconnectAttemptsRef.current = 0;
             startStats(peer);
             if (channelRef.current?.readyState === "open") {
+              if(negotiationTimerRef.current)window.clearTimeout(negotiationTimerRef.current);negotiationTimerRef.current=null;
               if (answerPollRef.current) window.clearInterval(answerPollRef.current);
               answerPollRef.current=null;
               setConnection("connected");
@@ -698,6 +730,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           if (peerRef.current !== peer || sessionIdRef.current !== sessionId) return;
           tools.opened();
           if(peer.connectionState==="connected"){
+            if(negotiationTimerRef.current)window.clearTimeout(negotiationTimerRef.current);negotiationTimerRef.current=null;
             if (answerPollRef.current) window.clearInterval(answerPollRef.current);
             answerPollRef.current=null;
             setConnection("connected");setPhase("연결됨");
@@ -717,15 +750,16 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
 
         try {
           const offer = await peer.createOffer({ offerToReceiveAudio: false });
-          await peer.setLocalDescription(offer);
+          current.check();await peer.setLocalDescription(offer);current.check();
         } catch (error) { codecNegotiationFailed = true; throw error; }
         if (!peer.localDescription) throw new Error("연결 요청을 완성하지 못했습니다.");
 
-        const offerResponse = await fetch(`/api/sessions/${sessionId}/offer`, {
+        const offerResponse = await current.fetch(`/api/sessions/${sessionId}/offer`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(peer.localDescription.toJSON()),
         });
+        current.check();
         if (!offerResponse.ok) throw new Error(await responseError(offerResponse, "휴대폰으로 연결 요청을 보내지 못했습니다."));
         setPhase("기기 응답 대기");
         setConnectionHint("휴대폰 알림에서 승인 또는 거절을 선택해 주세요.");
@@ -739,8 +773,8 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
           polling = true;
           attempts += 1;
           try {
-            const response = await fetch(`/api/sessions/${sessionId}`, { cache: "no-store" });
-            if (sessionIdRef.current !== sessionId) return;
+            const response = await current.fetch(`/api/sessions/${sessionId}`, { cache: "no-store" });
+            if (!current.active || sessionIdRef.current !== sessionId) return;
             if (!response.ok) throw new Error(await responseError(response, "연결 요청을 확인하지 못했습니다."));
             const payload = (await response.json()) as {
               session?: { state: string; answerType: string | null; answerSdp: string | null };
@@ -751,6 +785,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 sdpMLineIndex: number | null;
               }>;
             };
+            current.check();
             const state = payload.session?.state ?? "";
             if (state !== lastState) {
               diagnostics.record("connection_request", { state });
@@ -771,6 +806,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
             if (payload.session?.answerType === "answer" && payload.session.answerSdp && !peer.currentRemoteDescription) {
               try { await peer.setRemoteDescription({ type: "answer", sdp: payload.session.answerSdp }); }
               catch (error) { codecNegotiationFailed = true; throw error; }
+              current.check();
             }
             if (peer.currentRemoteDescription) {
               for (const candidate of payload.candidates ?? []) {
@@ -791,7 +827,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
               throw new Error("휴대폰 응답 시간이 초과되었습니다.");
             }
           } catch (error) {
-            if (sessionIdRef.current !== sessionId) return;
+            if (!current.active || sessionIdRef.current !== sessionId) return;
             if (answerPollRef.current) window.clearInterval(answerPollRef.current);
             answerPollRef.current = null;
             setConnectionError(error instanceof Error ? error.message : "연결하지 못했습니다.");
@@ -804,12 +840,13 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
         answerPollRef.current = window.setInterval(() => void pollAnswer(), 500);
         void pollAnswer();
       } catch (error) {
+        if(!current.active||attemptRef.current!==current)return;
         setConnectionError(error instanceof Error ? error.message : "연결을 시작하지 못했습니다.");
         if (codecNegotiationFailed && codecRef.current === "h264" && !codecFallbackRef.current) queueReconnect("코덱 협상을 VP8로 다시 시도합니다.");
         else await closeConnection();
       }
 
-    } finally { connectionStartingRef.current = false; }
+    } finally { if(scope===null||attemptRef.current===scope)connectionStartingRef.current = false; }
   }
 
   function queueReconnect(reason: string) {
@@ -828,6 +865,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
     const delay = Math.min(8_000, 1_000 * (2 ** (attempt - 1)));
     reconnectTimerRef.current = -1;
     void closeConnection(false, false).then(() => {
+      if(intentionalCloseRef.current)return;
       setConnection("reconnecting");setPhase("재연결 중");
       setConnectionError(null);
       setConnectionHint(`${reason} ${Math.round(delay / 1000)}초 후 재연결합니다. (${attempt}/4)`);
@@ -892,9 +930,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
   async function endPublicSession() {
     await closeConnection(true, true);
     setDetachedOpacity(100);
-    window.localStorage.removeItem("galaxy-remote-pc-mode");
-    window.localStorage.removeItem("galaxy-remote-detached-opacity");
-    window.sessionStorage.clear();
+    try { window.localStorage.removeItem("galaxy-remote-pc-mode");window.localStorage.removeItem("galaxy-remote-detached-opacity");window.sessionStorage.clear(); } catch { /* Storage policy must never block logout. */ }
     if (detachedWindow && !detachedWindow.closed) detachedWindow.close();
     setDetachedWindow(null);
     window.location.assign(signOutPath);
@@ -1250,7 +1286,7 @@ export default function RemoteConsole({ displayName, email, signOutPath }: Remot
                 className="device-select"
                 aria-label="원격 기기 선택"
                 value={selectedDevice?.id ?? ""}
-                onChange={(event) => setSelectedDeviceId(event.target.value || null)}
+                onChange={(event) => { void closeConnection(true,true);setSelectedDeviceId(event.target.value || null); }}
               >
                 {devices.length ? devices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>) : <option value="">등록된 기기 없음</option>}
               </select>

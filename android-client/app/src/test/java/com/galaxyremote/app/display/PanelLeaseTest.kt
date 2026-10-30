@@ -29,4 +29,13 @@ class PanelLeaseTest {
             try { lease.requireOff(seconds); fail("unbounded duration accepted") } catch (_: IllegalArgumentException) { }
         }
     }
+    @Test fun shortAndExtendedTrialsEachConsumeFreshLocalConsent() {
+        val lease = PanelLease()
+        for (seconds in listOf(30, 330)) {
+            lease.checked(true); lease.arm(true); lease.requireOff(seconds)
+            assertFalse(lease.checked); assertFalse(lease.armed)
+            rejects { lease.requireOff(seconds) }
+            rejects { lease.arm(true) }
+        }
+    }
 }

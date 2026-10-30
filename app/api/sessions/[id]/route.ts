@@ -47,10 +47,12 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   if (!user) return apiError("로그인이 필요합니다.", 401);
   const { id } = await context.params;
   const db = await getDb();
-  await db
+  const closed = await db
     .update(remoteSessions)
     .set({ state: "closed", updatedAt: Date.now() })
-    .where(and(eq(remoteSessions.id, id), eq(remoteSessions.ownerEmail, user.email)));
+    .where(and(eq(remoteSessions.id, id), eq(remoteSessions.ownerEmail, user.email)))
+    .returning({ id: remoteSessions.id });
+  if (!closed.length) return apiError("연결 요청을 찾을 수 없습니다.", 404);
   await db.delete(remoteSessionCandidates).where(eq(remoteSessionCandidates.sessionId, id));
   return Response.json({ ok: true });
 }

@@ -10,6 +10,9 @@ export class RemoteClient {
   inputSessionId: string | null = null;
   inputError: string | null = null;
   private pointerSequence = 0;
+  private closed = false;
+  private audioStarting = false;
+  private extensionChannels = new Set<RTCDataChannel>();
   sendPointerFrame(points: unknown[]) {
     if (!this.supports("multiTouchExperimental") || !this.inputSessionId || points.length > 5) return false;
     const boundary=points.some(p=>p!==null&&typeof p==="object"&&(p as {phase?:string}).phase!=="move");
@@ -33,7 +36,7 @@ export class RemoteClient {
   subscribe(listener: (state: ToolsState) => void) { this.listeners.add(listener); listener(this.state); return () => { this.listeners.delete(listener); }; }
   private update(value: Partial<ToolsState>) { if (Object.entries(value).every(([k,v]) => this.state[k as keyof ToolsState] === v)) return; this.state = { ...this.state, ...value }; this.listeners.forEach(l => l(this.state)); }
   opened() { this.diagnostics.record("channel", { state: "open" }); }
-  private raw(payload: Record<string, unknown>) { if (this.channel.readyState !== "open" || this.channel.bufferedAmount > 262144) return false; try { this.channel.send(JSON.stringify(payload)); return true; } catch { return false; } }
+  private raw(payload: Record<string, unknown>) { if (this.closed || this.channel.readyState !== "open" || this.channel.bufferedAmount > 262144) return false; try { this.channel.send(JSON.stringify(payload)); return true; } catch { return false; } }
   supports(feature: string) { return this.state.features.includes(feature); }
   sendTouch(payload: Record<string, unknown>) { return this.supports("liveTouch") && this.channel.bufferedAmount <= (payload.phase === "up" || payload.phase === "cancel" ? 65536 : 2048) && this.raw(payload); }
   send(payload: Record<string, unknown>) {
@@ -53,7 +56,7 @@ export class RemoteClient {
     this.diagnostics.record("command", { type, status, code: code ?? null });
   }
   private receive(text: string) {
-    if (text.length > 100_000) return;
+    if (this.closed || text.length > 100_000) return;
     try {
       const m = JSON.parse(text);
       if (m.type === "inputError") this.inputError = String(m.code).slice(0,80);
@@ -63,11 +66,11 @@ export class RemoteClient {
         // Old Android builds treat any arriving DataChannel as control. Only
         // open extension channels after the peer explicitly supports them.
         if (!this.fileTransfer && m.features.includes("files")) {
-          const files = this.peer.createDataChannel("files", { ordered: true });
+          const files = this.peer.createDataChannel("files", { ordered: true });this.extensionChannels.add(files);
           this.fileTransfer = new FileTransfer(files, status => { this.update({ fileStatus: status }); this.diagnostics.record("file", { state: status.startsWith("전송") ? "sending" : "event" }); }, offer => this.update({ offer }));
         }
         if (!this.state.features.includes("pcmAudio") && m.features.includes("pcmAudio")) {
-          const audio = this.peer.createDataChannel("audio-pcm", { ordered: false, maxRetransmits: 0 });
+          const audio = this.peer.createDataChannel("audio-pcm", { ordered: false, maxRetransmits: 0 });this.extensionChannels.add(audio);
           audio.binaryType = "arraybuffer"; audio.onmessage = (event: MessageEvent) => { if (event.data instanceof ArrayBuffer) this.player.receive(event.data); };
         }
         this.update({ features: m.features.filter((f: unknown) => typeof f === "string"), result: "처리 결과를 확인할 수 있습니다. 앱 화면의 버튼 동작까지 보장하지는 않습니다." });
@@ -93,17 +96,30 @@ export class RemoteClient {
   async copyClipboard() { await navigator.clipboard.writeText(this.state.clipboard); }
   capture() { return screenshot(this.video()); }
   async startRecording() {
+    if(this.closed)throw new Error("연결이 닫혔습니다.");
     const stream = this.stream(); if (!stream) throw new Error("연결 후 녹화해 주세요.");
     const tracks = [...stream.getVideoTracks(), ...(this.state.audio ? this.player.destination?.stream.getAudioTracks() ?? [] : [])];
-    if (await this.recording.start(new MediaStream(tracks))) this.update({ recording: true, recordingAt: Date.now() });
+    if (await this.recording.start(new MediaStream(tracks)) && !this.closed) this.update({ recording: true, recordingAt: Date.now() });
   }
   stopRecording() { this.recording.stop(); }
   async toggleAudio() {
+    if(this.closed)throw new Error("연결이 닫혔습니다.");
+    if(this.audioStarting)return;
     if (this.state.recording) throw new Error("녹화를 중지한 뒤 소리 설정을 바꿔 주세요.");
     if (this.state.audio) { this.send({ type: "audio", enabled: false }); this.player.close(); this.update({ audio: false, audioStatus: "꺼짐" }); }
-    else { this.player.close(); await this.player.start(); if (!this.send({ type: "audio", enabled: true })) throw new Error("연결 종료"); this.update({ audioStatus: "휴대폰 오디오 캡처를 요청했습니다." }); }
+    else {
+      this.audioStarting=true;
+      try {
+        this.player.close();await this.player.start();
+        if(this.closed||!this.send({ type: "audio", enabled: true })) {this.player.close();throw new Error("연결 종료");}
+        this.update({ audioStatus: "휴대폰 오디오 캡처를 요청했습니다." });
+      } catch(error) {this.player.close();throw error;}
+      finally {this.audioStarting=false;}
+    }
   }
   audioVolume(value: number) { this.player.volume(value); }
   exportDiagnostics() { downloadBlob(new Blob([this.diagnostics.export()], { type: "application/json" }), `GalaxyRemote-diagnostics-${timestamp()}.json`); }
-  close() { this.inputSessionId = null; this.inputError = null; this.senderMetrics = null; this.fileTransfer?.close(); this.recording.stop(); this.player.close(); this.pending.forEach(p => clearTimeout(p.timer)); this.pending.clear(); this.update({ features: [], clipboard: "", offer: null, audio: false, audioStatus: "꺼짐" }); this.diagnostics.record("channel", { state: "closed" }); }
+  close() { if(this.closed)return;this.closed=true;this.channel.onmessage=null;
+    for(const channel of this.extensionChannels){channel.onmessage=null;channel.onclose=null;channel.close();}this.extensionChannels.clear();
+    this.inputSessionId = null; this.inputError = null; this.senderMetrics = null; this.fileTransfer?.close(); this.recording.stop(); this.player.close(); this.pending.forEach(p => clearTimeout(p.timer)); this.pending.clear(); this.update({ features: [], clipboard: "", offer: null, audio: false, audioStatus: "꺼짐" }); this.diagnostics.record("channel", { state: "closed" });this.listeners.clear(); }
 }

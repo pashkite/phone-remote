@@ -11,10 +11,12 @@ class TouchProbeActivity : Activity() {
         android.util.Log.i("LiveTouchProbe", "window focus=$hasFocus")
         getSharedPreferences("touch_probe", MODE_PRIVATE).edit().putBoolean("ready", hasFocus).commit()
     }
+    override fun onResume() { super.onResume(); getSharedPreferences("touch_probe", MODE_PRIVATE).edit().putString("lifecycle", "resumed").commit() }
+    override fun onPause() { getSharedPreferences("touch_probe", MODE_PRIVATE).edit().putBoolean("ready", false).putString("lifecycle", "paused").commit(); super.onPause() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("touch_probe", MODE_PRIVATE)
-        prefs.edit().clear().commit()
+        prefs.edit().clear().putString("run", intent.getStringExtra("probe_run") ?: "manual").putString("lifecycle", "created").commit()
         setContentView(object : View(this) {
             override fun onTouchEvent(event: MotionEvent): Boolean {
                 android.util.Log.i("LiveTouchProbe", "touch action=${event.actionMasked}")

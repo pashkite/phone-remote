@@ -26,10 +26,12 @@ class LiveTouchTest {
         val oldEnabled = device.executeShellCommand("settings get secure accessibility_enabled").trim()
         val prefs = RemotePreferences(context)
         val oldStandby = prefs.standbyActive
+        val probe = context.getSharedPreferences("touch_probe", Context.MODE_PRIVATE)
+        val runId = UUID.randomUUID().toString()
         fun waitFor(label: String, predicate: () -> Boolean) {
             val end = System.currentTimeMillis() + 15000
             while (!predicate() && System.currentTimeMillis() < end) Thread.sleep(25)
-            assertTrue(label, predicate())
+            assertTrue("$label; probe=${probe.all}; accessibility=${RemoteAccessibilityService.isConnected()}", predicate())
         }
         try {
             device.wakeUp(); device.executeShellCommand("wm dismiss-keyguard"); device.pressHome(); device.waitForIdle(5000)
@@ -37,10 +39,9 @@ class LiveTouchTest {
             device.executeShellCommand("settings put secure accessibility_enabled 1")
             waitFor("Accessibility service connected") { RemoteAccessibilityService.isConnected() }
             prefs.standbyActive = true
-            device.executeShellCommand("am start -W -n ${context.packageName}/.TouchProbeActivity")
+            device.executeShellCommand("am start -W --activity-clear-top -n ${context.packageName}/.TouchProbeActivity --es probe_run $runId")
             device.waitForIdle(2000)
-            val probe = context.getSharedPreferences("touch_probe", Context.MODE_PRIVATE)
-            waitFor("Probe window focused and ready for input") { probe.getBoolean("ready", false) }
+            waitFor("Probe window focused and ready for input") { probe.getString("run", null) == runId && probe.getString("lifecycle", null) == "resumed" && probe.getBoolean("ready", false) }
             instrumentation.waitForIdleSync()
             val id = UUID.randomUUID().toString()
             fun touch(phase: String, x: Double = .3) {

@@ -29,13 +29,13 @@ class RemoteControlService : Service() {
     @Volatile
     private var webRtcSession: WebRtcSession? = null
     private var projectionPermission: Intent? = null
-    private var currentSessionId: String? = null
+    @Volatile private var currentSessionId: String? = null
     private var candidatePollFuture: ScheduledFuture<*>? = null
     private var candidatePollCount = 0
     private var connected = false
     private var leaseFuture: ScheduledFuture<*>? = null
     private var lastLeaseSuccess = 0L
-    private var shuttingDown = false
+    @Volatile private var shuttingDown = false
     private var finishingSession = false
     private var started = false
 
@@ -144,6 +144,9 @@ class RemoteControlService : Service() {
             ?.takeIf(String::isNotBlank)
             ?: return
         candidatePollFuture?.cancel(false)
+        leaseFuture?.cancel(false); leaseFuture = null
+        com.galaxyremote.app.display.DisplayControl.sessionConnected(false)
+        synchronized(webRtcLock) { webRtcSession?.closePeer() }
         currentSessionId = sessionId
         seenRemoteCandidates.clear()
         candidatePollCount = 0
@@ -165,9 +168,10 @@ class RemoteControlService : Service() {
             ApiClient(credentials).decideSession(sessionId, "approve")
         } catch (error: Throwable) {
             rethrowIfFatal(error)
-            failSession("연결 요청 승인", error)
+            if (currentSessionId == sessionId && !shuttingDown) failSession("연결 요청 승인", error)
             return
         }
+        if (currentSessionId != sessionId || shuttingDown) return
         val session = response.optJSONObject("session")
         val offerSdp = session?.optString("offerSdp").orEmpty()
         if (offerSdp.isBlank()) {
@@ -236,7 +240,7 @@ class RemoteControlService : Service() {
                     ApiClient(credentials).submitAnswer(sessionId, sdp)
                     sendStatus("PC가 보안 연결을 완료하는 중이에요.", true)
                 } catch (error: Exception) {
-                    failSession("PC 연결 응답 전송", error)
+                    if (currentSessionId == sessionId && !shuttingDown) failSession("PC 연결 응답 전송", error)
                 }
             }
         } catch (_: RejectedExecutionException) {
@@ -286,7 +290,7 @@ class RemoteControlService : Service() {
         } catch (_: Exception) {
             return
         }
-        applyRemoteCandidates(response.optJSONArray("candidates") ?: JSONArray())
+        if (currentSessionId == sessionId && !shuttingDown) applyRemoteCandidates(response.optJSONArray("candidates") ?: JSONArray())
     }
 
     private fun applyRemoteCandidates(candidates: JSONArray) {

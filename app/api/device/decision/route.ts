@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const device = await authenticateDevice(request);
   if (!device) return apiError("등록되지 않은 기기입니다.", 401);
   const payload = await readJson<DecisionPayload>(request);
-  const sessionId = payload?.sessionId?.trim();
+  const sessionId = (typeof payload?.sessionId === "string" ? payload.sessionId.trim() : "");
   if (!sessionId || !payload?.decision) return apiError("올바른 연결 승인 요청이 아닙니다.");
 
   const db = await getDb();
@@ -31,47 +31,57 @@ export async function POST(request: Request) {
     .limit(1);
   if (!session) return apiError("연결 요청이 만료되었거나 닫혔습니다.", 410);
 
+  if (!["opened", "approve", "reject"].includes(payload.decision) ||
+      !["approval_pending", "consent_pending", "offer_ready"].includes(session.state)) {
+    return apiError("이미 처리되었거나 올바르지 않은 연결 요청입니다.", 409);
+  }
   if (payload.decision === "reject") {
-    await db
+    const updated = await db
       .update(remoteSessions)
       .set({ state: "rejected", updatedAt: now })
       .where(
         and(
           eq(remoteSessions.id, sessionId),
           eq(remoteSessions.deviceId, device.id),
+          gt(remoteSessions.expiresAt, Date.now()),
           inArray(remoteSessions.state, ["approval_pending", "consent_pending"]),
         ),
-      );
+      ).returning({ id: remoteSessions.id });
+    if (!updated.length) return apiError("이미 처리된 연결 요청입니다.", 409);
     return Response.json({ ok: true, state: "rejected" });
   }
 
   if (payload.decision === "opened") {
-    await db
+    const updated = await db
       .update(remoteSessions)
       .set({ state: "consent_pending", updatedAt: now })
       .where(
         and(
           eq(remoteSessions.id, sessionId),
           eq(remoteSessions.deviceId, device.id),
+          gt(remoteSessions.expiresAt, Date.now()),
           eq(remoteSessions.state, "approval_pending"),
         ),
-      );
+      ).returning({ id: remoteSessions.id });
+    if (!updated.length) return apiError("이미 처리된 연결 요청입니다.", 409);
     return Response.json({ ok: true, state: "consent_pending" });
   }
 
   if (!["approval_pending", "consent_pending", "offer_ready"].includes(session.state)) {
     return apiError("이미 처리된 연결 요청입니다.", 409);
   }
-  await db
+  const approved = await db
     .update(remoteSessions)
     .set({ state: "offer_ready", updatedAt: now })
     .where(
       and(
         eq(remoteSessions.id, sessionId),
         eq(remoteSessions.deviceId, device.id),
+        gt(remoteSessions.expiresAt, Date.now()),
         inArray(remoteSessions.state, ["approval_pending", "consent_pending", "offer_ready"]),
       ),
-    );
+    ).returning({ id: remoteSessions.id });
+  if (!approved.length) return apiError("이미 처리된 연결 요청입니다.", 409);
 
   const [candidates, iceServers] = await Promise.all([
     db
