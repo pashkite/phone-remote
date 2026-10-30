@@ -1,0 +1,80 @@
+{
+  "base": "2b60ee1bbe166d70c5774502a1ed4fd5ec95c805",
+  "webTestsPassed": 94,
+  "pythonTestsPassed": 8,
+  "androidUnitTests": {
+    "Debug": {
+      "tests": 23,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "PanelTest": {
+      "tests": 23,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "webProductionBuild": "PASS",
+  "apkVariants": [
+    "arm64 panelTest signed",
+    "x86_64 debug",
+    "arm64 release unsigned",
+    "debug instrumentation compile only"
+  ],
+  "nativeWebRTC": "BLOCKED: managed Chromium disable_non_proxied_udp; timeout; zero frames",
+  "androidRuntimeVerified": false,
+  "physicalDeviceVerified": false,
+  "qaSiteDeployed": false,
+  "visualReferenceOriginalBytesAvailable": false,
+  "apk": {
+    "package": "com.galaxyremote.app.paneltest",
+    "versionCode": 19,
+    "versionName": "0.5.3-panel-experiment",
+    "label": "린로",
+    "abis": [
+      "arm64-v8a"
+    ],
+    "sha256": "2c62620be32fdcced6d95010383b44218b1c50e743972bcf57a75f2b04f5cc00",
+    "bytes": 16631295,
+    "signingCertificateSha256": [
+      "8f568dd3778c9b0f8a316427c1a2e048a2f454f153a9b6d40dd3e4337dd0748f"
+    ],
+    "previousVersionCode": 18,
+    "sameTestCertificate": true,
+    "zipAlignment16KiB": true,
+    "deviceInstallVerified": false
+  },
+  "browserResults": [
+    {
+      "name": "cancel during delayed session response cannot resurrect a peer",
+      "status": "PASS"
+    },
+    {
+      "name": "selecting another device closes the previous device control",
+      "status": "PASS"
+    },
+    {
+      "name": "authentication expiry terminates open control and prevents reconnect",
+      "status": "PASS"
+    },
+    {
+      "name": "100 connection cycles release peers, streams, timers and input; listener/heap samples",
+      "status": "PASS"
+    },
+    {
+      "name": "wall-clock reading soak stops after hidden/network disconnect",
+      "status": "PASS"
+    }
+  ],
+  "readingSoak": {
+    "requestedSeconds": 30,
+    "elapsedMs": 34086,
+    "swipes": 10,
+    "hiddenCount": 10,
+    "stoppedCount": 11,
+    "actualAndroid": false
+  },
+  "visualQa": "BLOCKED: original reference raster bytes and Android runtime captures unavailable"
+}

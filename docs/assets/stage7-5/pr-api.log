@@ -1,0 +1,4 @@
+gh pr list --repo pashkite/phone-remote --state all --limit 100 --json number,title,headRefName,baseRefName,state,url
+Post "https://api.github.com/graphql": Forbidden
+
+Initial stage 7 PR create attempt: Forbidden. A later Git refs query confirmed refs/pull/8/head points to the exact stage 7 base 2b60ee1bbe166d70c5774502a1ed4fd5ec95c805. No duplicate PR or merge was performed. Open/merged state remains unverified.

@@ -1,0 +1,3 @@
+PASS injected 300ms RTT/10% loss lowers opted-in auto; manual 1440p remains unchanged (no physical latency claim).
+PASS 1000 pointer moves coalesce into bounded snapshots with terminal release.
+PASS signaling network interruption fails visibly and releases the peer.

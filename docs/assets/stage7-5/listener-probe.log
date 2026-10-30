@@ -1,0 +1,1079 @@
+[
+  {
+    "cycle": 10,
+    "dom": {
+      "documents": 2,
+      "nodes": 1538,
+      "jsEventListeners": 287
+    },
+    "details": {
+      "window": {
+        "beforeunload": [
+          "() => {\n\twillUnload = true;\n}"
+        ],
+        "error": [
+          "(event) => {\n\t\t\tsendError(\"error\", event.error ?? (event.message ? new Error(event.message) : event));\n\t\t}",
+          "(event) => {\n\t\tconst err = event.error;\n\t\tif (isNavigationSignalError(err)) return;\n\t\tif (err instanceof Error) {\n\t\t\tif (alreadyRe"
+        ],
+        "unhandledrejection": [
+          "(event) => {\n\t\t\tsendError(\"unhandled-rejection\", event.reason);\n\t\t}",
+          "(event) => {\n\t\tconst reason = event.reason;\n\t\tif (isNavigationSignalError(reason)) return;\n\t\tif (reason instanceof Error) {\n\t\t\tif "
+        ],
+        "popstate": [
+          "(event) => {\n\t\t\tif (typeof window.__VINEXT_RSC_NAVIGATE__ !== \"function\") {\n\t\t\t\tcommitClientNavigationState();\n\t\t\t\trestoreScrollPo",
+          "(event) => {\n\t\tnotifyAppRouterTransitionStart(window.location.href, \"traverse\");\n\t\tconst pendingNavigation = window.__VINEXT_RSC_N"
+        ],
+        "pagehide": [
+          "() => {\n\t\tisPageUnloading = true;\n\t}",
+          "() => {\n\t\t\tvoid closeConnection(true, true);\n\t\t\tif (detachedWindow && !detachedWindow.closed) detachedWindow.close();\n\t\t}"
+        ],
+        "pageshow": [
+          "() => {\n\t\tisPageUnloading = false;\n\t}"
+        ],
+        "keydown": [
+          "(event) => keyEvent(event, true)"
+        ],
+        "keyup": [
+          "(event) => keyEvent(event, false)"
+        ],
+        "blur": [
+          "() => {\n\t\t\tengine.cancel(\"포커스 상실/숨김\");\n\t\t\tlatest.current.releaseLegacy();\n\t\t}"
+        ]
+      },
+      "document": {
+        "input": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "compositionstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "compositionupdate": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "compositionend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "drop": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "paste": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "keydown": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "keyup": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "keypress": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "abort": [
+          "function () { [native code] }"
+        ],
+        "auxclick": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "beforetoggle": [
+          "function () { [native code] }"
+        ],
+        "cancel": [
+          "function () { [native code] }"
+        ],
+        "canplay": [
+          "function () { [native code] }"
+        ],
+        "canplaythrough": [
+          "function () { [native code] }"
+        ],
+        "click": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "close": [
+          "function () { [native code] }"
+        ],
+        "contextmenu": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "copy": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "cut": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "drag": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragenter": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragexit": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragleave": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragover": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "durationchange": [
+          "function () { [native code] }"
+        ],
+        "emptied": [
+          "function () { [native code] }"
+        ],
+        "encrypted": [
+          "function () { [native code] }"
+        ],
+        "ended": [
+          "function () { [native code] }"
+        ],
+        "error": [
+          "function () { [native code] }"
+        ],
+        "gotpointercapture": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "invalid": [
+          "function () { [native code] }"
+        ],
+        "load": [
+          "function () { [native code] }"
+        ],
+        "loadeddata": [
+          "function () { [native code] }"
+        ],
+        "loadedmetadata": [
+          "function () { [native code] }"
+        ],
+        "loadstart": [
+          "function () { [native code] }"
+        ],
+        "lostpointercapture": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mousedown": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mousemove": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mouseout": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mouseover": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mouseup": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pause": [
+          "function () { [native code] }"
+        ],
+        "play": [
+          "function () { [native code] }"
+        ],
+        "playing": [
+          "function () { [native code] }"
+        ],
+        "pointercancel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerdown": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointermove": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerout": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerover": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerup": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "progress": [
+          "function () { [native code] }"
+        ],
+        "ratechange": [
+          "function () { [native code] }"
+        ],
+        "reset": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "resize": [
+          "function () { [native code] }"
+        ],
+        "seeked": [
+          "function () { [native code] }"
+        ],
+        "seeking": [
+          "function () { [native code] }"
+        ],
+        "stalled": [
+          "function () { [native code] }"
+        ],
+        "submit": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "suspend": [
+          "function () { [native code] }"
+        ],
+        "timeupdate": [
+          "function () { [native code] }"
+        ],
+        "touchcancel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "touchend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "touchstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "volumechange": [
+          "function () { [native code] }"
+        ],
+        "scroll": [
+          "function () { [native code] }"
+        ],
+        "toggle": [
+          "function () { [native code] }"
+        ],
+        "touchmove": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "waiting": [
+          "function () { [native code] }"
+        ],
+        "wheel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "scrollend": [
+          "function () { [native code] }"
+        ],
+        "animationend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "animationiteration": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "animationstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dblclick": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "focusin": [
+          "function () { [native code] }",
+          "function () { [native code] }",
+          "(event) => {\n\t\t\tif (event.target?.closest?.(\"[data-auto-control]\")) return;\n\t\t\tif (excluded(event.target)) {\n\t\t\t\tengine.cancel(\"설정"
+        ],
+        "focusout": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitionrun": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitionstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitioncancel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitionend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "change": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "textInput": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "visibilitychange": [
+          "() => {\n\t\t\tif (owners.some((o) => o.document.hidden)) cancel();\n\t\t}"
+        ]
+      },
+      "body": {},
+      "root": {}
+    }
+  },
+  {
+    "cycle": 50,
+    "dom": {
+      "documents": 2,
+      "nodes": 1538,
+      "jsEventListeners": 287
+    },
+    "details": {
+      "window": {
+        "beforeunload": [
+          "() => {\n\twillUnload = true;\n}"
+        ],
+        "error": [
+          "(event) => {\n\t\t\tsendError(\"error\", event.error ?? (event.message ? new Error(event.message) : event));\n\t\t}",
+          "(event) => {\n\t\tconst err = event.error;\n\t\tif (isNavigationSignalError(err)) return;\n\t\tif (err instanceof Error) {\n\t\t\tif (alreadyRe"
+        ],
+        "unhandledrejection": [
+          "(event) => {\n\t\t\tsendError(\"unhandled-rejection\", event.reason);\n\t\t}",
+          "(event) => {\n\t\tconst reason = event.reason;\n\t\tif (isNavigationSignalError(reason)) return;\n\t\tif (reason instanceof Error) {\n\t\t\tif "
+        ],
+        "popstate": [
+          "(event) => {\n\t\t\tif (typeof window.__VINEXT_RSC_NAVIGATE__ !== \"function\") {\n\t\t\t\tcommitClientNavigationState();\n\t\t\t\trestoreScrollPo",
+          "(event) => {\n\t\tnotifyAppRouterTransitionStart(window.location.href, \"traverse\");\n\t\tconst pendingNavigation = window.__VINEXT_RSC_N"
+        ],
+        "pagehide": [
+          "() => {\n\t\tisPageUnloading = true;\n\t}",
+          "() => {\n\t\t\tvoid closeConnection(true, true);\n\t\t\tif (detachedWindow && !detachedWindow.closed) detachedWindow.close();\n\t\t}"
+        ],
+        "pageshow": [
+          "() => {\n\t\tisPageUnloading = false;\n\t}"
+        ],
+        "keydown": [
+          "(event) => keyEvent(event, true)"
+        ],
+        "keyup": [
+          "(event) => keyEvent(event, false)"
+        ],
+        "blur": [
+          "() => {\n\t\t\tengine.cancel(\"포커스 상실/숨김\");\n\t\t\tlatest.current.releaseLegacy();\n\t\t}"
+        ]
+      },
+      "document": {
+        "input": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "compositionstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "compositionupdate": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "compositionend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "drop": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "paste": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "keydown": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "keyup": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "keypress": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "abort": [
+          "function () { [native code] }"
+        ],
+        "auxclick": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "beforetoggle": [
+          "function () { [native code] }"
+        ],
+        "cancel": [
+          "function () { [native code] }"
+        ],
+        "canplay": [
+          "function () { [native code] }"
+        ],
+        "canplaythrough": [
+          "function () { [native code] }"
+        ],
+        "click": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "close": [
+          "function () { [native code] }"
+        ],
+        "contextmenu": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "copy": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "cut": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "drag": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragenter": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragexit": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragleave": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragover": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "durationchange": [
+          "function () { [native code] }"
+        ],
+        "emptied": [
+          "function () { [native code] }"
+        ],
+        "encrypted": [
+          "function () { [native code] }"
+        ],
+        "ended": [
+          "function () { [native code] }"
+        ],
+        "error": [
+          "function () { [native code] }"
+        ],
+        "gotpointercapture": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "invalid": [
+          "function () { [native code] }"
+        ],
+        "load": [
+          "function () { [native code] }"
+        ],
+        "loadeddata": [
+          "function () { [native code] }"
+        ],
+        "loadedmetadata": [
+          "function () { [native code] }"
+        ],
+        "loadstart": [
+          "function () { [native code] }"
+        ],
+        "lostpointercapture": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mousedown": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mousemove": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mouseout": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mouseover": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mouseup": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pause": [
+          "function () { [native code] }"
+        ],
+        "play": [
+          "function () { [native code] }"
+        ],
+        "playing": [
+          "function () { [native code] }"
+        ],
+        "pointercancel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerdown": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointermove": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerout": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerover": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerup": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "progress": [
+          "function () { [native code] }"
+        ],
+        "ratechange": [
+          "function () { [native code] }"
+        ],
+        "reset": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "resize": [
+          "function () { [native code] }"
+        ],
+        "seeked": [
+          "function () { [native code] }"
+        ],
+        "seeking": [
+          "function () { [native code] }"
+        ],
+        "stalled": [
+          "function () { [native code] }"
+        ],
+        "submit": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "suspend": [
+          "function () { [native code] }"
+        ],
+        "timeupdate": [
+          "function () { [native code] }"
+        ],
+        "touchcancel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "touchend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "touchstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "volumechange": [
+          "function () { [native code] }"
+        ],
+        "scroll": [
+          "function () { [native code] }"
+        ],
+        "toggle": [
+          "function () { [native code] }"
+        ],
+        "touchmove": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "waiting": [
+          "function () { [native code] }"
+        ],
+        "wheel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "scrollend": [
+          "function () { [native code] }"
+        ],
+        "animationend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "animationiteration": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "animationstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dblclick": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "focusin": [
+          "function () { [native code] }",
+          "function () { [native code] }",
+          "(event) => {\n\t\t\tif (event.target?.closest?.(\"[data-auto-control]\")) return;\n\t\t\tif (excluded(event.target)) {\n\t\t\t\tengine.cancel(\"설정"
+        ],
+        "focusout": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitionrun": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitionstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitioncancel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitionend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "change": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "textInput": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "visibilitychange": [
+          "() => {\n\t\t\tif (owners.some((o) => o.document.hidden)) cancel();\n\t\t}"
+        ]
+      },
+      "body": {},
+      "root": {}
+    }
+  },
+  {
+    "cycle": 100,
+    "dom": {
+      "documents": 2,
+      "nodes": 1538,
+      "jsEventListeners": 287
+    },
+    "details": {
+      "window": {
+        "beforeunload": [
+          "() => {\n\twillUnload = true;\n}"
+        ],
+        "error": [
+          "(event) => {\n\t\t\tsendError(\"error\", event.error ?? (event.message ? new Error(event.message) : event));\n\t\t}",
+          "(event) => {\n\t\tconst err = event.error;\n\t\tif (isNavigationSignalError(err)) return;\n\t\tif (err instanceof Error) {\n\t\t\tif (alreadyRe"
+        ],
+        "unhandledrejection": [
+          "(event) => {\n\t\t\tsendError(\"unhandled-rejection\", event.reason);\n\t\t}",
+          "(event) => {\n\t\tconst reason = event.reason;\n\t\tif (isNavigationSignalError(reason)) return;\n\t\tif (reason instanceof Error) {\n\t\t\tif "
+        ],
+        "popstate": [
+          "(event) => {\n\t\t\tif (typeof window.__VINEXT_RSC_NAVIGATE__ !== \"function\") {\n\t\t\t\tcommitClientNavigationState();\n\t\t\t\trestoreScrollPo",
+          "(event) => {\n\t\tnotifyAppRouterTransitionStart(window.location.href, \"traverse\");\n\t\tconst pendingNavigation = window.__VINEXT_RSC_N"
+        ],
+        "pagehide": [
+          "() => {\n\t\tisPageUnloading = true;\n\t}",
+          "() => {\n\t\t\tvoid closeConnection(true, true);\n\t\t\tif (detachedWindow && !detachedWindow.closed) detachedWindow.close();\n\t\t}"
+        ],
+        "pageshow": [
+          "() => {\n\t\tisPageUnloading = false;\n\t}"
+        ],
+        "keydown": [
+          "(event) => keyEvent(event, true)"
+        ],
+        "keyup": [
+          "(event) => keyEvent(event, false)"
+        ],
+        "blur": [
+          "() => {\n\t\t\tengine.cancel(\"포커스 상실/숨김\");\n\t\t\tlatest.current.releaseLegacy();\n\t\t}"
+        ]
+      },
+      "document": {
+        "input": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "compositionstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "compositionupdate": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "compositionend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "drop": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "paste": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "keydown": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "keyup": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "keypress": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "abort": [
+          "function () { [native code] }"
+        ],
+        "auxclick": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "beforetoggle": [
+          "function () { [native code] }"
+        ],
+        "cancel": [
+          "function () { [native code] }"
+        ],
+        "canplay": [
+          "function () { [native code] }"
+        ],
+        "canplaythrough": [
+          "function () { [native code] }"
+        ],
+        "click": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "close": [
+          "function () { [native code] }"
+        ],
+        "contextmenu": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "copy": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "cut": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "drag": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragenter": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragexit": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragleave": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragover": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dragstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "durationchange": [
+          "function () { [native code] }"
+        ],
+        "emptied": [
+          "function () { [native code] }"
+        ],
+        "encrypted": [
+          "function () { [native code] }"
+        ],
+        "ended": [
+          "function () { [native code] }"
+        ],
+        "error": [
+          "function () { [native code] }"
+        ],
+        "gotpointercapture": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "invalid": [
+          "function () { [native code] }"
+        ],
+        "load": [
+          "function () { [native code] }"
+        ],
+        "loadeddata": [
+          "function () { [native code] }"
+        ],
+        "loadedmetadata": [
+          "function () { [native code] }"
+        ],
+        "loadstart": [
+          "function () { [native code] }"
+        ],
+        "lostpointercapture": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mousedown": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mousemove": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mouseout": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mouseover": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "mouseup": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pause": [
+          "function () { [native code] }"
+        ],
+        "play": [
+          "function () { [native code] }"
+        ],
+        "playing": [
+          "function () { [native code] }"
+        ],
+        "pointercancel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerdown": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointermove": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerout": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerover": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "pointerup": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "progress": [
+          "function () { [native code] }"
+        ],
+        "ratechange": [
+          "function () { [native code] }"
+        ],
+        "reset": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "resize": [
+          "function () { [native code] }"
+        ],
+        "seeked": [
+          "function () { [native code] }"
+        ],
+        "seeking": [
+          "function () { [native code] }"
+        ],
+        "stalled": [
+          "function () { [native code] }"
+        ],
+        "submit": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "suspend": [
+          "function () { [native code] }"
+        ],
+        "timeupdate": [
+          "function () { [native code] }"
+        ],
+        "touchcancel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "touchend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "touchstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "volumechange": [
+          "function () { [native code] }"
+        ],
+        "scroll": [
+          "function () { [native code] }"
+        ],
+        "toggle": [
+          "function () { [native code] }"
+        ],
+        "touchmove": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "waiting": [
+          "function () { [native code] }"
+        ],
+        "wheel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "scrollend": [
+          "function () { [native code] }"
+        ],
+        "animationend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "animationiteration": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "animationstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "dblclick": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "focusin": [
+          "function () { [native code] }",
+          "function () { [native code] }",
+          "(event) => {\n\t\t\tif (event.target?.closest?.(\"[data-auto-control]\")) return;\n\t\t\tif (excluded(event.target)) {\n\t\t\t\tengine.cancel(\"설정"
+        ],
+        "focusout": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitionrun": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitionstart": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitioncancel": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "transitionend": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "change": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "textInput": [
+          "function () { [native code] }",
+          "function () { [native code] }"
+        ],
+        "visibilitychange": [
+          "() => {\n\t\t\tif (owners.some((o) => o.document.hidden)) cancel();\n\t\t}"
+        ]
+      },
+      "body": {},
+      "root": {}
+    }
+  }
+]

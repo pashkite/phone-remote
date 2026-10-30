@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "name": "real API device cards, empty video, navigation, registration and focus return",
+      "status": "PASS"
+    },
+    {
+      "name": "live navigation commands and capability-gated tools",
+      "status": "PASS"
+    },
+    {
+      "name": "fit/zoom, manual quality, theme and mode changes retain the same peer and video",
+      "status": "PASS"
+    },
+    {
+      "name": "small-screen device drawer, settings, disconnect and honest unknown states",
+      "status": "PASS"
+    }
+  ],
+  "physicalDeviceVerified": false,
+  "transport": "local simulation",
+  "consolePageErrors": []
+}

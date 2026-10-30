@@ -1,0 +1,13 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.evaluate: Error: Native loopback timeout: {"codec":"video/VP8","a":"new","b":"new","iceA":"new","iceB":"new","channel":"connecting","videoWidth":0,"readyState":0,"frames":0,"echoes":0,"origin":"http://127.0.0.1:5175","secure":true,"gatheringA":"complete","gatheringB":"complete","hasIce":true,"mediaLines":2,"frame":454,"native":"function RTCPeerConnection() { [native code] }"}
+    at until (eval at evaluate (:303:30), <anonymous>:18:130)
+    at async eval (eval at evaluate (:303:30), <anonymous>:19:5)
+    at async <anonymous>:329:30
+    at /workspace/phone-remote/scripts/test-webrtc-loopback-browser.mjs:9:26 {
+  log: []
+}
+
+Node.js v24.19.0
