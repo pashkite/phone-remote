@@ -52,8 +52,7 @@ Persist deployment ID and poll get_deployment_status only while pending/building
 A terminal failure must not advance successful SHA; retain old success IDs. Use native status and live checks; never report success from a saved candidate alone.
 
 ## Health and recovery
-After native success, check the existing production domain: GET / -> 200 with LINRO login UI; unauthenticated protected GET /api/devices, /api/ice, /api/build-info -> 401; unauthenticated device POST /api/device/session with empty JSON -> 401.
-Also send a fabricated oai-authenticated-user-email header (the configured owner email, if safely available) without a real login; it must not bypass the gateway.
+After native success, use read-only GET checks on the existing production domain: / -> 200 with LINRO login UI; unauthenticated /api/devices, /api/ice, /api/build-info -> 401. No production POST or fabricated user identity headers: automatic approval review rejected those checks during initial setup due to unapproved identifier transmission and possible state changes. Cover device POST rejection and identity separation with isolated local tests; label the corresponding production tests unverified.
 Check that a referenced hashed JS asset loads. Never create or delete production devices/sessions/pairing codes merely for smoke tests.
 Owner-login/browser flow and actual Android/WebRTC end-to-end remain unverified unless explicitly exercised in an authorized signed-in session.
 If post-publish checks fail and the previously healthy saved version is available with unchanged DB/env, the official deploy_site_version supports selecting it again. Restore only that known version using native tools, poll, verify health, report actual recovery. Never invent a rollback API. If uncertain, keep the lock/pending IDs and report.
