@@ -244,7 +244,7 @@ class ConnectionListenerService : Service() {
         )
         return Notification.Builder(this, READY_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_remote)
-            .setContentTitle("Galaxy Remote 연결 요청 대기")
+            .setContentTitle("Galaxy Remote 2.0 연결 요청 대기")
             .setContentText(message)
             .setContentIntent(openIntent)
             .setOngoing(true)

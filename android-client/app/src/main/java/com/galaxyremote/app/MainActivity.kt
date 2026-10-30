@@ -419,7 +419,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun configureRemoteKeyboard() {
         if (!RemoteKeyboardService.isEnabled(this)) {
-            Toast.makeText(this, "목록에서 Galaxy Remote 키보드를 먼저 켜 주세요.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "목록에서 Galaxy Remote 2.0 키보드를 먼저 켜 주세요.", Toast.LENGTH_LONG).show()
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
             return
         }
@@ -686,7 +686,7 @@ class MainActivity : AppCompatActivity() {
         accessibilityStatus.text = if (accessibilityEnabled) {
             "허용됨 · PC의 터치와 키 입력을 전달할 준비가 됐어요."
         } else {
-            "접근성 설정에서 ‘Galaxy Remote 조작’을 허용해 주세요."
+            "접근성 설정에서 ‘Galaxy Remote 2.0 조작’을 허용해 주세요."
         }
         accessibilityStatus.setTextColor(
             ContextCompat.getColor(this, if (accessibilityEnabled) R.color.online else R.color.muted),
@@ -695,7 +695,7 @@ class MainActivity : AppCompatActivity() {
 
         keyboardStatus.text = when {
             keyboardSelected -> "선택됨 · Discord 같은 앱에서도 실제 입력 칸으로 문자를 전달합니다."
-            keyboardEnabled -> "켜짐 · 키보드 선택 버튼을 눌러 Galaxy Remote를 선택해 주세요."
+            keyboardEnabled -> "켜짐 · 키보드 선택 버튼을 눌러 Galaxy Remote 2.0을 선택해 주세요."
             else -> "선택 사항 · 복잡한 채팅 앱에서 입력 지연과 문자 오염을 줄여 줍니다."
         }
         keyboardStatus.setTextColor(
@@ -703,7 +703,7 @@ class MainActivity : AppCompatActivity() {
         )
         keyboardButton.text = when {
             keyboardSelected -> "키보드 선택 변경"
-            keyboardEnabled -> "Galaxy Remote 키보드 선택"
+            keyboardEnabled -> "Galaxy Remote 2.0 키보드 선택"
             else -> "원격 키보드 켜기"
         }
 

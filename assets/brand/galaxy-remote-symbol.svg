@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Galaxy Remote 2.0">
+  <rect width="96" height="96" rx="20" fill="#111C2A"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="7">
+    <path d="M49 20H31a8 8 0 0 0-8 8v40a8 8 0 0 0 8 8h18a8 8 0 0 0 8-8v-9" stroke="#E3EDF7"/>
+    <path d="M43 43h30M63 33l10 10-10 10" stroke="#67D8CA"/>
+  </g>
+</svg>
