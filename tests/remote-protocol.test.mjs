@@ -109,3 +109,13 @@ test('old app telemetry stays unknown, new telemetry expires at consumer and cle
  assert.equal(client.senderMetrics.sendFps,30);assert.equal(client.senderMetrics.hardwareEncoder,null);
  client.close();assert.equal(client.senderMetrics,null);
 });
+
+test('pointer frame transport requires a negotiated session and uses bounded move/release budgets',()=>{
+ const channel=new Channel();const client=new RemoteClient(channel,{},()=>null,()=>null);
+ const point={pointerId:'p1',phase:'down',x:.5,y:.5};assert.equal(client.sendPointerFrame([point]),false);
+ channel.message({type:'capabilities',v:1,inputSessionId:id,features:['multiTouchExperimental']});
+ assert.equal(client.sendPointerFrame([point]),true);const first=JSON.parse(channel.sent.at(-1));assert.equal(first.sessionId,id);assert.equal(first.pointerSeq,1);
+ channel.bufferedAmount=3000;assert.equal(client.sendPointerFrame([{...point,phase:'move'}]),false);assert.equal(client.sendPointerFrame([{...point,phase:'up'}]),true);
+ const second=JSON.parse(channel.sent.at(-1));assert.equal(second.pointerSeq,2);assert.equal(client.sendPointerFrame(Array(6).fill(point)),false);
+ client.close();assert.equal(client.inputSessionId,null);
+});

@@ -13,7 +13,13 @@ class RemoteCommandProcessor(
     @Volatile private var active = true
     private var highestSequence = 0L
     private val inbox = com.galaxyremote.app.streaming.BoundedInputQueue<JSONObject>(64) {
-        if (it.optString("type") == "touch" && it.optString("phase") == "move") it.optString("touchId") else null
+        if (it.optString("type") == "touch" && it.optString("phase") == "move") it.optString("touchId")
+        else if (it.optString("type") == "pointerFrame") {
+            val points = it.optJSONArray("points")
+            if (points != null && points.length() in 1..5 && (0 until points.length()).all { n -> points.optJSONObject(n)?.optString("phase") == "move" })
+                "frame:" + it.optString("sessionId") + (0 until points.length()).map { n -> points.optJSONObject(n)?.optString("pointerId") }.sortedBy { id -> id }.joinToString(",")
+            else null
+        } else null
     }
     private var draining = false
     private var overflow = false

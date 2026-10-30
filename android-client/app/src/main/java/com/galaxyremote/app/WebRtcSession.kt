@@ -336,6 +336,7 @@ class WebRtcSession(
     @Synchronized
     fun closePeer() {
         statsFuture?.cancel(false); statsFuture = null
+        RemoteAccessibilityService.endPointerSession()
         RemoteAccessibilityService.stopTouch()
         pendingSessionId = null
         commands?.close(); commands = null
@@ -428,20 +429,26 @@ class WebRtcSession(
         controlChannel?.unregisterObserver()
         controlChannel = channel
         commands?.close()
+        RemoteAccessibilityService.beginPointerSession(pendingSessionId ?: "") { code ->
+            sendJson(JSONObject().put("type", "inputError").put("code", code))
+        }
         commands = RemoteCommandProcessor(
             send = { value ->
                 sendJson(value)
                 if (value.optString("status") in setOf("completed", "failed")) RemoteDiagnostics.record(context, "command", mapOf("status" to value.optString("status"), "code" to value.optString("code")))
             },
             handle = { command, finish ->
-                if (onControlResult != null) onControlResult.invoke(command, finish)
+                if (onControlResult != null) onControlResult.invoke(command) { ok, code ->
+                    if (!ok && command.optString("type") == "pointerFrame") sendJson(JSONObject().put("type","inputError").put("code",code ?: "INPUT_REJECTED"))
+                    finish(ok, code)
+                }
                 else finish(onControl(command), null)
             },
         )
         fun capabilities() {
-            val features = JSONArray().put("streamMetrics").put("quality720").put("lowLatencyInput").put("commandAck").put("clipboard").put("files").put("diagnostics").put("standby").put("liveTouch")
+            val features = JSONArray().put("multiTouchExperimental").put("streamMetrics").put("quality720").put("lowLatencyInput").put("commandAck").put("clipboard").put("files").put("diagnostics").put("standby").put("liveTouch")
             if (Build.VERSION.SDK_INT >= 29) features.put("pcmAudio")
-            sendJson(JSONObject().put("type", "capabilities").put("v", 1).put("features", features))
+            sendJson(JSONObject().put("type", "capabilities").put("v", 1).put("inputSessionId", pendingSessionId).put("features", features))
         }
         channel.registerObserver(object : DataChannel.Observer {
             override fun onBufferedAmountChange(previousAmount: Long) = Unit
@@ -454,6 +461,9 @@ class WebRtcSession(
                 try {
                     val command = JSONObject(String(data, Charsets.UTF_8))
                     if (command.optString("type") == "hello") { capabilities(); return }
+                    if (command.optString("type") == "pointerFrame" && (command.optInt("v") != 1 || command.optString("sessionId") != pendingSessionId)) {
+                        sendJson(JSONObject().put("type","inputError").put("code","SESSION_MISMATCH")); return
+                    }
                     commands?.receive(command)
                 } catch (_: Exception) { RemoteDiagnostics.record(context, "protocol", mapOf("code" to "INVALID_MESSAGE")) }
             }

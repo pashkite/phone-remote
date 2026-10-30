@@ -342,7 +342,7 @@ class RemoteControlService : Service() {
             }
             "quality", "volume" -> { val success = handleControl(command); finish(success, if (success) null else "SESSION_INACTIVE") }
             "text", "key" -> if (RemoteKeyboardService.dispatch(command)) finish(true, null) else RemoteAccessibilityService.dispatchWithResult(command, finish)
-            "touch", "tap", "longPress", "swipe", "global" -> RemoteAccessibilityService.dispatchWithResult(command, finish)
+            "pointerFrame", "touch", "tap", "longPress", "swipe", "global" -> RemoteAccessibilityService.dispatchWithResult(command, finish)
             else -> finish(false, "UNSUPPORTED_COMMAND")
         }
     }

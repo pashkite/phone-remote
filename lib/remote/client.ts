@@ -7,6 +7,15 @@ export type ToolsState = { features: string[]; result: string; clipboard: string
 export class RemoteClient {
   readonly diagnostics: Diagnostics;
   senderMetrics: SenderMetrics | null = null;
+  inputSessionId: string | null = null;
+  inputError: string | null = null;
+  private pointerSequence = 0;
+  sendPointerFrame(points: unknown[]) {
+    if (!this.supports("multiTouchExperimental") || !this.inputSessionId || points.length > 5) return false;
+    const boundary=points.some(p=>p!==null&&typeof p==="object"&&(p as {phase?:string}).phase!=="move");
+    if (this.channel.bufferedAmount > (boundary?65536:2048)) return false;
+    return this.raw({ type: "pointerFrame", v: 1, sessionId: this.inputSessionId, pointerSeq: ++this.pointerSequence, points });
+  }
   readonly id = crypto.randomUUID();
   private pending = new Map<string, { timer: ReturnType<typeof setTimeout>; type: string }>();
   private sequence = 0;
@@ -31,7 +40,7 @@ export class RemoteClient {
     if (!this.state.features.includes("commandAck")) return this.raw(payload);
     if (this.pending.size >= 256) { this.update({ result: "명령 응답이 밀리고 있습니다. 잠시 기다려 주세요." }); return false; }
     const id = crypto.randomUUID(), type = String(payload.type);
-    const timer = setTimeout(() => { this.pending.delete(id); this.result(type, "timeout", "TIMEOUT"); }, 6000);
+    const timer = setTimeout(() => { this.pending.delete(id); if (["tap","swipe","longPress"].includes(type)) this.inputError = "INPUT_TIMEOUT"; this.result(type, "timeout", "TIMEOUT"); }, 6000);
     this.pending.set(id, { timer, type });
     if (!this.raw({ ...payload, v: PROTOCOL_VERSION, id, seq: ++this.sequence })) { clearTimeout(timer); this.pending.delete(id); return false; }
     return true;
@@ -47,7 +56,9 @@ export class RemoteClient {
     if (text.length > 100_000) return;
     try {
       const m = JSON.parse(text);
+      if (m.type === "inputError") this.inputError = String(m.code).slice(0,80);
       if (m.type === "capabilities" && m.v === PROTOCOL_VERSION && Array.isArray(m.features)) {
+        if (typeof m.inputSessionId === "string" && /^[a-f0-9-]{36}$/.test(m.inputSessionId)) this.inputSessionId = m.inputSessionId;
         if (!this.helloSent) { this.helloSent = true; this.raw({ type: "hello", v: 1, features: ["commandAck", "clipboard", "files", "pcmAudio", "diagnostics", "liveTouch"] }); }
         // Old Android builds treat any arriving DataChannel as control. Only
         // open extension channels after the peer explicitly supports them.
@@ -63,6 +74,7 @@ export class RemoteClient {
       }
       if (m.type === "ack" && m.v === 1 && ["received","accepted","completed","failed"].includes(m.status)) {
         const pending = this.pending.get(m.id); if (!pending) return;
+        if (m.status === "failed" && ["tap","swipe","longPress"].includes(pending.type)) this.inputError = "INPUT_REJECTED";
         this.result(pending.type, m.status, typeof m.code === "string" && /^[A-Z_]{1,50}$/.test(m.code) ? m.code : undefined);
         if (["completed","failed"].includes(m.status)) { clearTimeout(pending.timer); this.pending.delete(m.id); }
       }
@@ -93,5 +105,5 @@ export class RemoteClient {
   }
   audioVolume(value: number) { this.player.volume(value); }
   exportDiagnostics() { downloadBlob(new Blob([this.diagnostics.export()], { type: "application/json" }), `GalaxyRemote-diagnostics-${timestamp()}.json`); }
-  close() { this.senderMetrics = null; this.fileTransfer?.close(); this.recording.stop(); this.player.close(); this.pending.forEach(p => clearTimeout(p.timer)); this.pending.clear(); this.update({ features: [], clipboard: "", offer: null, audio: false, audioStatus: "꺼짐" }); this.diagnostics.record("channel", { state: "closed" }); }
+  close() { this.inputSessionId = null; this.inputError = null; this.senderMetrics = null; this.fileTransfer?.close(); this.recording.stop(); this.player.close(); this.pending.forEach(p => clearTimeout(p.timer)); this.pending.clear(); this.update({ features: [], clipboard: "", offer: null, audio: false, audioStatus: "꺼짐" }); this.diagnostics.record("channel", { state: "closed" }); }
 }

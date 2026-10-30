@@ -20,6 +20,8 @@ import org.json.JSONObject
 
 class RemoteAccessibilityService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var pointerFault: ((String) -> Unit)? = null
+    private val multiTouch: com.galaxyremote.app.interaction.PointerBackend by lazy { com.galaxyremote.app.interaction.MultiPointerController(this, mainHandler, ::screenSize) { pointerFault?.invoke(it) } }
     private val liveTouch by lazy { LiveTouchController(this, mainHandler, ::screenSize) }
     private var savedClipboard: ClipData? = null
     private var clipboardCaptured = false
@@ -38,24 +40,40 @@ class RemoteAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        pendingPointerSession?.let { multiTouch.begin(it); pointerFault = pendingPointerFault }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
 
-    override fun onInterrupt() { liveTouch.release() }
+    override fun onInterrupt() { liveTouch.release(); multiTouch.release(); pointerFault?.invoke("ACCESSIBILITY_INTERRUPTED") }
 
     override fun onDestroy() {
-        liveTouch.release()
+        liveTouch.release(); multiTouch.release(); pointerFault?.invoke("ACCESSIBILITY_DISABLED"); pointerFault = null
         mainHandler.removeCallbacks(restoreClipboard)
         if (clipboardCaptured) restoreClipboard.run()
         if (instance === this) instance = null
         super.onDestroy()
     }
 
+    private fun acceptPointerFrame(command: JSONObject): Boolean {
+        val seq=(command.opt("pointerSeq") as? Number)?.toDouble() ?: return false
+        if(!seq.isFinite() || seq < 1 || seq > 9007199254740991.0 || seq != kotlin.math.floor(seq))return false
+        val points=command.optJSONArray("points") ?: return false
+        if(points.length()>5)return false
+        val events=mutableListOf<com.galaxyremote.app.interaction.PointerEvent>()
+        for(i in 0 until points.length()) {
+            val p=points.optJSONObject(i) ?: return false
+            if(p.opt("x") !is Number || p.opt("y") !is Number)return false
+            events += com.galaxyremote.app.interaction.PointerEvent(p.optString("pointerId"),p.optString("phase"),p.optDouble("x"),p.optDouble("y"))
+        }
+        return multiTouch.accept(command.optString("sessionId"),seq.toLong(),events)
+    }
+
     private fun handle(command: JSONObject): Boolean {
         if (!RemotePreferences(this).standbyActive) return false
         return when (command.optString("type")) {
-            "touch" -> liveTouch.receive(command)
+            "pointerFrame" -> { liveTouch.release(); val ok=acceptPointerFrame(command); if(!ok)multiTouch.release(); ok }
+            "touch" -> { multiTouch.release(); liveTouch.receive(command) }
             "tap" -> tap(command.optDouble("x"), command.optDouble("y"))
             "longPress" -> longPress(
                 command.optDouble("x"),
@@ -248,8 +266,12 @@ class RemoteAccessibilityService : AccessibilityService() {
     companion object {
         @Volatile
         private var instance: RemoteAccessibilityService? = null
+        @Volatile private var pendingPointerSession: String? = null
+        @Volatile private var pendingPointerFault: ((String) -> Unit)? = null
 
-        fun stopTouch() { instance?.let { it.mainHandler.post { it.liveTouch.release() } } }
+        fun stopTouch() { instance?.let { it.mainHandler.post { it.liveTouch.release(); it.multiTouch.release() } } }
+        fun beginPointerSession(session: String, fault: (String) -> Unit) { pendingPointerSession=session;pendingPointerFault=fault; instance?.let { it.mainHandler.post { it.pointerFault=fault; it.multiTouch.begin(session) } } }
+        fun endPointerSession() { pendingPointerSession=null;pendingPointerFault=null; instance?.let { it.mainHandler.post { it.pointerFault=null; it.multiTouch.release() } } }
         fun isConnected(): Boolean = instance != null
 
         fun dispatch(command: JSONObject): Boolean = instance?.handle(command) ?: false
