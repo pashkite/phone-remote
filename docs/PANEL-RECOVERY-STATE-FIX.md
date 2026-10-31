@@ -1,5 +1,7 @@
 # 린로: 4번 수락 이후 OFF 사전 검사 상태 추적
 
+후속: [패널 OFF 입력·영상 진단 v22](PANEL-OFF-INPUT-DIAGNOSTICS.md). 아래 v21 자료는 이전 버전 기록입니다.
+
 ## 확인한 사실과 한계
 
 사용자 Galaxy 진단에는 정상 도움말(exit 255)에 `power-off`·`power-reset`이 있고, display 0은 내장 화면 ON, WebRTC 가상 화면은 display 0을 미러링한다. 사용자는 4번에서 명령 수락 메시지도 확인했다. `DisplayControl.turnOff()`의 `RECOVERY_NOT_VERIFIED`는 해당 요청이 **실제 OFF 명령 전에 차단**됐다는 뜻이다. 그 이전의 다른 OFF 요청 여부까지 증명하지는 않는다.

@@ -44,6 +44,7 @@ class MultiPointerController(private val service: AccessibilityService, private 
         val size=display ?: screenSize()
         val builder=GestureDescription.Builder()
         val next=linkedMapOf<String,Stroke>()
+        val origin=InteractionDiagnostics.trace.currentPhase()
         try {
             for(id in ids) {
                 val old=rendered[id];val p=desired[id]
@@ -57,11 +58,13 @@ class MultiPointerController(private val service: AccessibilityService, private 
             }
             busy=true
             val callback=object: AccessibilityService.GestureResultCallback(){
-                override fun onCompleted(gestureDescription: GestureDescription?) {busy=false;rendered=next;drain()}
-                override fun onCancelled(gestureDescription: GestureDescription?) {reset();fault("MULTI_GESTURE_CANCELLED")}
+                override fun onCompleted(gestureDescription: GestureDescription?) {InteractionDiagnostics.trace.record(InteractionTrace.Kind.MULTI_TOUCH,InteractionTrace.Result.COMPLETED,origin);busy=false;rendered=next;drain()}
+                override fun onCancelled(gestureDescription: GestureDescription?) {InteractionDiagnostics.trace.record(InteractionTrace.Kind.MULTI_TOUCH,InteractionTrace.Result.CANCELLED,origin);reset();fault("MULTI_GESTURE_CANCELLED")}
             }
-            if(!service.dispatchGesture(builder.build(),callback,handler)){reset();fault("MULTI_GESTURE_REJECTED")}
-        }catch(_:Exception){reset();fault("MULTI_GESTURE_ERROR")}
+            if(!service.dispatchGesture(builder.build(),callback,handler)){
+                InteractionDiagnostics.trace.record(InteractionTrace.Kind.MULTI_TOUCH,InteractionTrace.Result.REJECTED,origin);reset();fault("MULTI_GESTURE_REJECTED")
+            } else InteractionDiagnostics.trace.record(InteractionTrace.Kind.MULTI_TOUCH,InteractionTrace.Result.SUBMITTED,origin)
+        }catch(_:Exception){InteractionDiagnostics.trace.record(InteractionTrace.Kind.MULTI_TOUCH,InteractionTrace.Result.ERROR,origin);reset();fault("MULTI_GESTURE_ERROR")}
     }
     private fun reset(){busy=false;dirty=false;rendered.clear();state.clear();display=null;handler.removeCallbacks(watchdog)}
 }

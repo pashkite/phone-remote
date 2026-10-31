@@ -5,12 +5,16 @@ import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.os.Handler
 import org.json.JSONObject
+import com.galaxyremote.app.interaction.InteractionDiagnostics
+import com.galaxyremote.app.interaction.InteractionTrace.Kind
+import com.galaxyremote.app.interaction.InteractionTrace.Result
 
 /** Serial continued strokes keep a single Android pointer down across network samples. */
 class LiveTouchController(
     private val service: AccessibilityService,
     private val handler: Handler,
     private val screenSize: () -> Pair<Float, Float>,
+    private val fault: (String) -> Unit = {},
 ) {
     private data class Sample(val touchId: String, val phase: String, val x: Float, val y: Float)
     private val queue = ArrayDeque<Sample>()
@@ -76,16 +80,32 @@ class LiveTouchController(
         stroke = next
         busy = true
         val token = generation
+        val origin = InteractionDiagnostics.trace.currentPhase()
         val callback = object : AccessibilityService.GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 if (token != generation) return
+                InteractionDiagnostics.trace.record(Kind.LIVE_TOUCH, Result.COMPLETED, origin)
                 busy = false
                 if (!continuing) { stroke = null; if (queue.isEmpty()) display = null }
                 drain()
             }
-            override fun onCancelled(gestureDescription: GestureDescription?) { reset(token) }
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                if (token != generation) return
+                InteractionDiagnostics.trace.record(Kind.LIVE_TOUCH, Result.CANCELLED, origin)
+                reset(token); fault("LIVE_GESTURE_CANCELLED")
+            }
         }
-        if (!service.dispatchGesture(GestureDescription.Builder().addStroke(next).build(), callback, handler)) reset(token)
+        try {
+            if (service.dispatchGesture(GestureDescription.Builder().addStroke(next).build(), callback, handler)) {
+                InteractionDiagnostics.trace.record(Kind.LIVE_TOUCH, Result.SUBMITTED, origin)
+            } else {
+                InteractionDiagnostics.trace.record(Kind.LIVE_TOUCH, Result.REJECTED, origin)
+                reset(token); fault("LIVE_GESTURE_REJECTED")
+            }
+        } catch (_: Exception) {
+            InteractionDiagnostics.trace.record(Kind.LIVE_TOUCH, Result.ERROR, origin)
+            reset(token); fault("LIVE_GESTURE_ERROR")
+        }
     }
 
     private fun reset(token: Int) {

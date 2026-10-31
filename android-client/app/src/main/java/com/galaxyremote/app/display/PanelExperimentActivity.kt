@@ -149,13 +149,19 @@ class PanelExperimentActivity : Activity() {
             refresh?.let { handler.postDelayed(it, 1000) }
         }
         button("상태 다시 보기") { localDisplays(); refreshUi() }
-        button("전체 진단 보기") {
+        fun showDiagnostics(title: String, body: String) {
             val details = TextView(this).apply {
-                text = displayOutput.text.toString() + "\n\n" + DisplayControl.diagnostics
+                text = body
                 textSize = 12f; setPadding(dp(16), dp(16), dp(16), dp(16)); setTextIsSelectable(true)
             }
-            AlertDialog.Builder(this).setTitle("패널 사전 검사 전체 진단")
+            AlertDialog.Builder(this).setTitle(title)
                 .setView(ScrollView(this).apply { addView(details) }).setPositiveButton("닫기", null).show()
+        }
+        button("입력·영상 진단 보기 (ON/OFF 비교)") {
+            showDiagnostics("입력·영상 진단 · 실기기 판정 아님", com.galaxyremote.app.interaction.InteractionDiagnostics.trace.diagnostics())
+        }
+        button("전체 진단 보기") {
+            showDiagnostics("패널 사전 검사 전체 진단", displayOutput.text.toString() + "\n\n" + DisplayControl.diagnostics)
         }
         refresh = object : Runnable { override fun run() { refreshUi(); handler.postDelayed(this, 1000) } }
         refreshUi()

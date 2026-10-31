@@ -17,12 +17,15 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONObject
+import com.galaxyremote.app.interaction.InteractionDiagnostics
+import com.galaxyremote.app.interaction.InteractionTrace.Kind
+import com.galaxyremote.app.interaction.InteractionTrace.Result
 
 class RemoteAccessibilityService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pointerFault: ((String) -> Unit)? = null
     private val multiTouch: com.galaxyremote.app.interaction.PointerBackend by lazy { com.galaxyremote.app.interaction.MultiPointerController(this, mainHandler, ::screenSize) { pointerFault?.invoke(it) } }
-    private val liveTouch by lazy { LiveTouchController(this, mainHandler, ::screenSize) }
+    private val liveTouch by lazy { LiveTouchController(this, mainHandler, ::screenSize) { pointerFault?.invoke(it) } }
     private var savedClipboard: ClipData? = null
     private var clipboardCaptured = false
     private val restoreClipboard = Runnable {
@@ -99,6 +102,28 @@ class RemoteAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun trackedGesture(kind: Kind, gesture: GestureDescription, callback: GestureResultCallback?): Boolean {
+        val origin = InteractionDiagnostics.trace.currentPhase()
+        val traced = object : GestureResultCallback() {
+            override fun onCompleted(description: GestureDescription?) {
+                InteractionDiagnostics.trace.record(kind, Result.COMPLETED, origin)
+                callback?.onCompleted(description)
+            }
+            override fun onCancelled(description: GestureDescription?) {
+                InteractionDiagnostics.trace.record(kind, Result.CANCELLED, origin)
+                callback?.onCancelled(description)
+            }
+        }
+        return try {
+            dispatchGesture(gesture, traced, mainHandler).also {
+                InteractionDiagnostics.trace.record(kind, if (it) Result.SUBMITTED else Result.REJECTED, origin)
+            }
+        } catch (error: Exception) {
+            InteractionDiagnostics.trace.record(kind, Result.ERROR, origin)
+            throw error
+        }
+    }
+
     private fun tap(normalizedX: Double, normalizedY: Double, callback: GestureResultCallback? = null): Boolean {
         val (width, height) = screenSize()
         val x = normalizedX.coerceIn(0.0, 1.0).toFloat() * width
@@ -107,7 +132,7 @@ class RemoteAccessibilityService : AccessibilityService() {
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, 60))
             .build()
-        return dispatchGesture(gesture, callback, mainHandler)
+        return trackedGesture(Kind.TAP, gesture, callback)
     }
 
     private fun longPress(normalizedX: Double, normalizedY: Double, durationMs: Long, callback: GestureResultCallback? = null): Boolean {
@@ -124,7 +149,7 @@ class RemoteAccessibilityService : AccessibilityService() {
                 ),
             )
             .build()
-        return dispatchGesture(gesture, callback, mainHandler)
+        return trackedGesture(Kind.LONG_PRESS, gesture, callback)
     }
 
     private fun swipe(
@@ -155,7 +180,7 @@ class RemoteAccessibilityService : AccessibilityService() {
                 ),
             )
             .build()
-        return dispatchGesture(gesture, callback, mainHandler)
+        return trackedGesture(Kind.SWIPE, gesture, callback)
     }
 
     private fun global(action: String): Boolean {
@@ -166,7 +191,9 @@ class RemoteAccessibilityService : AccessibilityService() {
             "lock" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) GLOBAL_ACTION_LOCK_SCREEN else return false
             else -> return false
         }
-        return performGlobalAction(globalAction)
+        return performGlobalAction(globalAction).also {
+            InteractionDiagnostics.trace.record(Kind.GLOBAL, if (it) Result.SUBMITTED else Result.REJECTED)
+        }
     }
 
     private fun focusedInput(): AccessibilityNodeInfo? {

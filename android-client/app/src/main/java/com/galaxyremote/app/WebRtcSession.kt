@@ -434,6 +434,13 @@ class WebRtcSession(
         commands?.close()
         RemoteAccessibilityService.beginPointerSession(pendingSessionId ?: "") { code ->
             sendJson(JSONObject().put("type", "inputError").put("code", code))
+            if (code.startsWith("LIVE_GESTURE_")) {
+                sendNotice(when (code) {
+                    "LIVE_GESTURE_CANCELLED" -> "Android가 터치·드래그를 취소했습니다. 화면 ON과 OFF 결과를 비교하고 앱의 입력 진단을 확인하세요."
+                    "LIVE_GESTURE_REJECTED" -> "Android가 터치·드래그 접수를 거절했습니다. 앱의 입력 진단을 확인하세요."
+                    else -> "터치·드래그 처리 중 오류가 발생했습니다. 앱의 입력 진단을 확인하세요."
+                })
+            }
         }
         commands = RemoteCommandProcessor(
             send = { value ->
@@ -441,6 +448,7 @@ class WebRtcSession(
                 if (value.optString("status") in setOf("completed", "failed")) RemoteDiagnostics.record(context, "command", mapOf("status" to value.optString("status"), "code" to value.optString("code")))
             },
             handle = { command, finish ->
+                com.galaxyremote.app.interaction.InteractionDiagnostics.trace.received(command.optString("type"))
                 if (onControlResult != null) onControlResult.invoke(command) { ok, code ->
                     if (!ok && command.optString("type") == "pointerFrame") sendJson(JSONObject().put("type","inputError").put("code",code ?: "INPUT_REJECTED"))
                     finish(ok, code)

@@ -28,7 +28,7 @@ object DisplayControl {
     @Volatile private var latestDiagnostics = "아직 명령을 조회하지 않았습니다."
     @Volatile private var recoveryDiagnostics = "아직 4번 사전 검사 결과가 없습니다."
     val gateSummary: String get() = gate.summary()
-    val diagnostics: String get() = gate.diagnostics() + "\n\n최근 4번 사전 검사 결과 (참고)\n" +
+    val diagnostics: String get() = com.galaxyremote.app.interaction.InteractionDiagnostics.trace.diagnostics() + "\n\n" + gate.diagnostics() + "\n\n최근 4번 사전 검사 결과 (참고)\n" +
         recoveryDiagnostics + "\n\n최근 작업 진단\n" + latestDiagnostics
     @Volatile var commandSummary = "명령 지원 여부 미확인 · OFF 시험 차단"
         private set
@@ -180,11 +180,13 @@ object DisplayControl {
         wakeLock?.acquire((seconds + 10) * 1000L)
         pending = true; gate.invalidate("한 번의 OFF 시험에 사전 검사를 사용했습니다.")
         deadline = android.os.SystemClock.elapsedRealtime() + seconds * 1000L
+        com.galaxyremote.app.interaction.InteractionDiagnostics.trace.phase(com.galaxyremote.app.interaction.InteractionTrace.Phase.OFF_REQUESTED)
         return try { publish(remote.turnOff(seconds)) } catch (error: Exception) {
             restore(); throw error
         }
     }
     @Synchronized fun restore(reason: String = "복구·입력 해제를 요청했습니다."): String {
+        com.galaxyremote.app.interaction.InteractionDiagnostics.trace.phase(com.galaxyremote.app.interaction.InteractionTrace.Phase.RESTORE_REQUESTED)
         releaseInputAndWake(); gate.invalidate(reason)
         val result = try {
             service?.restore()?.let { publish(it) } ?: "shell 서비스가 없습니다. 외부·시간 제한 복구 경로와 실제 패널을 확인하세요."
