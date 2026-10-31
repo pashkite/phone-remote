@@ -9,10 +9,7 @@
   "last_successful_version_id": "appgprj_6a589c9a8e588191830cce459783c685~appgver_3a51f06b9790819190b1b5ac261c76aa",
   "last_successful_deployment_id": "appgdep_6ae512f505508191a4a546bef3b548b1",
   "last_checked_github_sha": "6971be1511de9131580bcfe505821de10d0509aa",
-  "lock": {
-    "owner": "linro-check-mvw64wuw-rz3ma8s489",
-    "acquired_at": "2026-10-31T08:58:07.064Z"
-  },
+  "lock": null,
   "pending": null,
   "last_result": "Published LINRO version 48; native success and read-only production health passed; saved GitHub/Sites provenance; no duplicate publish",
   "previous_successful": {
