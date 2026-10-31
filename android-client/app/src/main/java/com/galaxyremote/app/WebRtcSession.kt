@@ -445,11 +445,20 @@ class WebRtcSession(
         commands = RemoteCommandProcessor(
             send = { value ->
                 sendJson(value)
+                if (value.optString("status") == "failed" && value.optString("code").startsWith("SHELL_")) {
+                    sendNotice(if (value.optString("code") == "SHELL_SINGLE_POINTER_ONLY")
+                        "이 Shizuku 터치 후보는 단일 포인터만 지원합니다. 멀티터치 시험은 지원하지 않습니다."
+                        else "Shizuku 직접 터치를 전달하지 못했습니다. 즉시 복구 후 입력 진단을 확인하세요.")
+                }
                 if (value.optString("status") in setOf("completed", "failed")) RemoteDiagnostics.record(context, "command", mapOf("status" to value.optString("status"), "code" to value.optString("code")))
             },
             handle = { command, finish ->
                 com.galaxyremote.app.interaction.InteractionDiagnostics.trace.received(command.optString("type"))
                 if (onControlResult != null) onControlResult.invoke(command) { ok, code ->
+                    if (!ok && code?.startsWith("SHELL_") == true) {
+                        sendJson(JSONObject().put("type", "inputError").put("code", code))
+                        sendNotice(if (code == "SHELL_SINGLE_POINTER_ONLY") "Shizuku 후보는 단일 포인터만 지원합니다." else "Shizuku 직접 터치가 실패했습니다. 복구 후 진단을 확인하세요.")
+                    }
                     if (!ok && command.optString("type") == "pointerFrame") sendJson(JSONObject().put("type","inputError").put("code",code ?: "INPUT_REJECTED"))
                     finish(ok, code)
                 }

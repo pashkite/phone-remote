@@ -1,0 +1,56 @@
+{
+  "parentCommit": "915bbf66bf7d8c1297c8154fdc3e132f68c7e141",
+  "baseMain": "6971be1511de9131580bcfe505821de10d0509aa",
+  "userReport": {
+    "physicalOffObserved": true,
+    "offTouchFailed": true,
+    "onTouchAndRecentsWorking": true,
+    "offLiveTouchReceived": 9,
+    "offLiveTouchSubmitted": 6,
+    "offLiveTouchCallbacksCompleted": 6,
+    "offCaptureFrames": 221,
+    "offIntervalMs": 30329,
+    "lastFrameAgeAtEndMs": 70
+  },
+  "androidUnitTests": {
+    "Debug": {
+      "tests": 64,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "PanelTest": {
+      "tests": 64,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "webTestsPassed": 94,
+  "pythonTestsPassed": 12,
+  "deviceAvailable": false,
+  "shellInputRuntimeVerified": false,
+  "shellPermissionCompatibilityVerified": false,
+  "offInputIssueFixed": false,
+  "recentsPreviewIssueFixed": false,
+  "automaticRecoveryRuntimeVerified": false,
+  "browserRuntimeRerun": false,
+  "apk": {
+    "package": "com.galaxyremote.app.paneltest",
+    "versionCode": 23,
+    "versionName": "0.5.6-panel-experiment",
+    "label": "린로",
+    "abis": [
+      "arm64-v8a"
+    ],
+    "sha256": "1d56424175dd28658a5e96c97f3e6e9ccad75860fd0bef2a0e6d94cc1a0f5d12",
+    "bytes": 16463160,
+    "signingCertificateSha256": [
+      "8f568dd3778c9b0f8a316427c1a2e048a2f454f153a9b6d40dd3e4337dd0748f"
+    ],
+    "previousVersionCode": 22,
+    "sameTestCertificate": true,
+    "zipAlignment16KiB": true,
+    "deviceInstallVerified": false
+  }
+}

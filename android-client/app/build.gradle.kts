@@ -20,8 +20,8 @@ android {
         applicationId = "com.galaxyremote.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "0.5.5"
+        versionCode = 23
+        versionName = "0.5.6"
         buildConfigField("String", "DEVICE_TEST_BUILD_ID", "\"linro-reference-ui-stage7-5\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

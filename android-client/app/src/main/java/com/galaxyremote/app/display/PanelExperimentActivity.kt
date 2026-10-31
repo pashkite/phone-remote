@@ -61,6 +61,12 @@ class PanelExperimentActivity : Activity() {
         val commandsOutput = text(DisplayControl.commandSummary)
         val gateOutput = text(DisplayControl.gateSummary)
         val output = text(DisplayControl.status).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        val backendOutput = text(DisplayControl.inputBackendSummary)
+        val directOption = CheckBox(this).apply {
+            text = "이번 비교에 Shizuku 직접 터치 후보 사용 (사용자 승인 · display 0 · 단일 터치/길게 누르기/드래그만 · 미검증)"
+            setTextColor(getColor(R.color.ink)); minHeight = dp(48)
+        }
+        column.addView(directOption)
         val offButtons = mutableListOf<Button>()
         val setupButtons = mutableListOf<Button>()
         val confirmed = CheckBox(this).apply {
@@ -71,9 +77,11 @@ class PanelExperimentActivity : Activity() {
             if (output.text.toString() != DisplayControl.status) output.text = DisplayControl.status
             commandsOutput.text = DisplayControl.commandSummary
             gateOutput.text = DisplayControl.gateSummary + if (trialScheduled) "\nOFF 시험 확인·5초 대기 중입니다. 취소하려면 즉시 복구를 누르세요." else ""
-            setupButtons.forEach { it.isEnabled = !busy && !trialScheduled }
-            confirmed.isEnabled = !busy && !trialScheduled
-            offButtons.forEach { it.isEnabled = !busy && !trialScheduled && confirmed.isChecked && DisplayControl.trialReady }
+            backendOutput.text = DisplayControl.inputBackendSummary
+            directOption.isEnabled = !busy && !trialScheduled && !DisplayControl.inTrial
+            setupButtons.forEach { it.isEnabled = !busy && !trialScheduled && !DisplayControl.inTrial }
+            confirmed.isEnabled = !busy && !trialScheduled && !DisplayControl.inTrial
+            offButtons.forEach { it.isEnabled = !busy && !trialScheduled && confirmed.isChecked && DisplayControl.trialReady && !(directOption.isChecked && it.tag == 330) }
         }
         fun work(action: () -> String) {
             busy = true
@@ -115,22 +123,24 @@ class PanelExperimentActivity : Activity() {
         }
         column.addView(confirmed)
         confirmed.setOnCheckedChangeListener { _, _ -> refreshUi() }
+        directOption.setOnCheckedChangeListener { _, _ -> refreshUi() }
         text("OFF 버튼은 명령 지원·복구 사전 검사·WebRTC 연결·외부 복구 확인 조건이 충족될 때만 활성화됩니다. 실제 복구와 타이머 생존은 여전히 미검증입니다.")
         fun trial(seconds: Int) {
             check(!busy && !trialScheduled && confirmed.isChecked && DisplayControl.trialReady) { "RECOVERY_NOT_VERIFIED" }
             requireScreenOn()
             val ticket = DisplayControl.trialTicket()
+            val useDirect = directOption.isChecked
             trialScheduled = true
             refreshUi()
             var started = false
             AlertDialog.Builder(this).setTitle("${seconds}초 제한 패널 OFF 시험")
-                .setMessage("5초 뒤 실행합니다. 게임으로 돌아가세요. 외부 복구가 충분히 검증되지 않았다면 취소하세요. 영상·입력·실제 복구는 미검증입니다.")
+                .setMessage("입력 경로: ${if (useDirect) "Shizuku 단일 직접 터치 후보" else "기존 접근성"}. 5초 뒤 실행합니다. 게임으로 돌아가세요. 외부 복구가 충분히 검증되지 않았다면 취소하세요. 영상·입력·실제 복구는 미검증입니다.")
                 .setNegativeButton("취소", null).setPositiveButton("검증했으며 시험 시작") { _, _ ->
                     started = true
                     confirmed.isChecked = false
                     handler.postDelayed({
                         work {
-                            try { requireScreenOn(); DisplayControl.turnOff(seconds, true, ticket) }
+                            try { requireScreenOn(); DisplayControl.turnOff(seconds, true, ticket, useDirect) }
                             finally { runOnUiThread { trialScheduled = false } }
                         }
                     }, 5000)
@@ -138,8 +148,20 @@ class PanelExperimentActivity : Activity() {
                     if (!started) { trialScheduled = false; refreshUi() }
                 }.show()
         }
+        setupButtons += button("선택한 Shizuku 터치: 화면 ON에서 30초 비교") {
+            check(directOption.isChecked && confirmed.isChecked && DisplayControl.trialReady) { "SHELL_TOUCH_CONSENT_REQUIRED" }
+            requireScreenOn()
+            val ticket = DisplayControl.trialTicket()
+            trialScheduled = true; refreshUi()
+            AlertDialog.Builder(this).setTitle("화면 ON 직접 터치 30초 비교")
+                .setMessage("Shizuku shell 권한으로 display 0에 단일 터치를 전달합니다. 화면 OFF 명령은 보내지 않습니다. 실제 앱 반응은 미검증입니다. 비교 종료 후 4번 검사를 다시 하세요.")
+                .setNegativeButton("취소", null).setPositiveButton("승인하고 시작") { _, _ ->
+                    confirmed.isChecked = false
+                    work { requireScreenOn(); DisplayControl.startTouchOnlyTrial(ticket) }
+                }.setOnDismissListener { trialScheduled = false; refreshUi() }.show()
+        }
         offButtons += button("5. 30초 OFF 시험 (5초 후)") { trial(30) }
-        offButtons += button("30초 시험 통과 후: 330초 시험 (5초 후)") { trial(330) }
+        offButtons += button("30초 시험 통과 후: 330초 시험 (5초 후)") { trial(330) }.apply { tag = 330 }
         button("즉시 복구 · 입력 해제") {
             DisplayControl.cancelTrial()
             handler.removeCallbacksAndMessages(null)
@@ -158,7 +180,7 @@ class PanelExperimentActivity : Activity() {
                 .setView(ScrollView(this).apply { addView(details) }).setPositiveButton("닫기", null).show()
         }
         button("입력·영상 진단 보기 (ON/OFF 비교)") {
-            showDiagnostics("입력·영상 진단 · 실기기 판정 아님", com.galaxyremote.app.interaction.InteractionDiagnostics.trace.diagnostics())
+            showDiagnostics("입력·영상 진단 · 실기기 판정 아님", DisplayControl.inputDiagnostics)
         }
         button("전체 진단 보기") {
             showDiagnostics("패널 사전 검사 전체 진단", displayOutput.text.toString() + "\n\n" + DisplayControl.diagnostics)

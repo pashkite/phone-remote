@@ -191,6 +191,7 @@ class RemoteAccessibilityService : AccessibilityService() {
             "lock" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) GLOBAL_ACTION_LOCK_SCREEN else return false
             else -> return false
         }
+        com.galaxyremote.app.display.DisplayControl.releaseDirectPointers()
         return performGlobalAction(globalAction).also {
             InteractionDiagnostics.trace.record(Kind.GLOBAL, if (it) Result.SUBMITTED else Result.REJECTED)
         }
@@ -296,7 +297,7 @@ class RemoteAccessibilityService : AccessibilityService() {
         @Volatile private var pendingPointerSession: String? = null
         @Volatile private var pendingPointerFault: ((String) -> Unit)? = null
 
-        fun stopTouch() { instance?.let { it.mainHandler.post { it.liveTouch.release(); it.multiTouch.release() } } }
+        fun stopTouch() { com.galaxyremote.app.display.DisplayControl.releaseDirectPointers(); instance?.let { it.mainHandler.post { it.liveTouch.release(); it.multiTouch.release() } } }
         fun beginPointerSession(session: String, fault: (String) -> Unit) { pendingPointerSession=session;pendingPointerFault=fault; instance?.let { it.mainHandler.post { it.pointerFault=fault; it.multiTouch.begin(session) } } }
         fun endPointerSession() { pendingPointerSession=null;pendingPointerFault=null; instance?.let { it.mainHandler.post { it.pointerFault=null; it.multiTouch.release() } } }
         fun isConnected(): Boolean = instance != null
@@ -308,6 +309,7 @@ class RemoteAccessibilityService : AccessibilityService() {
             val service = instance
             if (service == null) { finish(false, "ACCESSIBILITY_DISABLED"); return }
             if (!RemotePreferences(service).standbyActive) { finish(false, "SESSION_INACTIVE"); return }
+            if (com.galaxyremote.app.display.DisplayControl.routeDirectTouch(command, finish)) return
             val type = command.optString("type")
             if (type in setOf("tap", "longPress", "swipe")) {
                 val keys = if (type == "swipe") listOf("fromX", "fromY", "toX", "toY") else listOf("x", "y")

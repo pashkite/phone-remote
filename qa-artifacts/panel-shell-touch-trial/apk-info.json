@@ -1,0 +1,18 @@
+{
+  "package": "com.galaxyremote.app.paneltest",
+  "versionCode": 23,
+  "versionName": "0.5.6-panel-experiment",
+  "label": "린로",
+  "abis": [
+    "arm64-v8a"
+  ],
+  "sha256": "1d56424175dd28658a5e96c97f3e6e9ccad75860fd0bef2a0e6d94cc1a0f5d12",
+  "bytes": 16463160,
+  "signingCertificateSha256": [
+    "8f568dd3778c9b0f8a316427c1a2e048a2f454f153a9b6d40dd3e4337dd0748f"
+  ],
+  "previousVersionCode": 22,
+  "sameTestCertificate": true,
+  "zipAlignment16KiB": true,
+  "deviceInstallVerified": false
+}

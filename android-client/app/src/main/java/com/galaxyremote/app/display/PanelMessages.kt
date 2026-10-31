@@ -11,6 +11,9 @@ internal object PanelAccessPolicy {
 
 internal object PanelMessages {
     private val messages = linkedMapOf(
+        "SHELL_TOUCH_SHORT_TRIAL_ONLY" to "직접 터치 후보는 30초 비교만 허용합니다.",
+        "SHELL_TOUCH_UNSUPPORTED" to "이 펌웨어에서 직접 터치 API를 확인하지 못했습니다. OFF를 실행하지 않았습니다.",
+        "SHELL_TOUCH_CONSENT_REQUIRED" to "직접 터치 선택과 사용자 확인·사전 검사가 필요합니다.",
         "SHIZUKU_NOT_RUNNING" to "Shizuku를 먼저 시작하세요.",
         "SHIZUKU_PERMISSION_DENIED" to "Shizuku 권한을 휴대폰에서 허용하세요.",
         "SHELL_ONLY_NO_ROOT" to "루트 방식은 지원하지 않습니다. shell 방식 Shizuku를 사용하세요.",

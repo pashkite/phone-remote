@@ -19,6 +19,11 @@ object DisplayControl {
     private val io = Executors.newSingleThreadExecutor()
     private val monitor = Executors.newSingleThreadScheduledExecutor()
     private val owner = Binder()
+    @Volatile private var directTouch: ShellTouchClient? = null
+    val inputBackendSummary: String get() = if (directTouch != null)
+        if (directTouch?.isActive == true) "Shizuku 직접 터치 후보 · 단일 포인터 · 실기기 미검증"
+        else "직접 터치 중단 · 새 입력 차단 · 복구/재설정 필요"
+        else "기존 접근성 입력"
     @Volatile private var service: IPanelService? = null
     @Volatile private var connected = false
     private val gate = PanelTrialGate()
@@ -28,7 +33,9 @@ object DisplayControl {
     @Volatile private var latestDiagnostics = "아직 명령을 조회하지 않았습니다."
     @Volatile private var recoveryDiagnostics = "아직 4번 사전 검사 결과가 없습니다."
     val gateSummary: String get() = gate.summary()
-    val diagnostics: String get() = com.galaxyremote.app.interaction.InteractionDiagnostics.trace.diagnostics() + "\n\n" + gate.diagnostics() + "\n\n최근 4번 사전 검사 결과 (참고)\n" +
+    @Volatile private var directDiagnostics = "직접 터치 후보를 아직 준비하지 않았습니다."
+    val inputDiagnostics: String get() = "입력 경로: $inputBackendSummary\n$directDiagnostics\n\n" + com.galaxyremote.app.interaction.InteractionDiagnostics.trace.diagnostics()
+    val diagnostics: String get() = inputDiagnostics + "\n\n" + gate.diagnostics() + "\n\n최근 4번 사전 검사 결과 (참고)\n" +
         recoveryDiagnostics + "\n\n최근 작업 진단\n" + latestDiagnostics
     @Volatile var commandSummary = "명령 지원 여부 미확인 · OFF 시험 차단"
         private set
@@ -40,6 +47,7 @@ object DisplayControl {
     private lateinit var args: Shizuku.UserServiceArgs
 
     private fun lost(reason: String) {
+        directTouch?.close()
         service = null; binding = false; gate.invalidate(reason); pending = false
         commandSummary = "명령 지원 여부 미확인 · OFF 시험 차단"
         releaseInputAndWake()
@@ -162,6 +170,7 @@ object DisplayControl {
         inspectionDiagnostics = JSONObject(result).getString("diagnostics")
         return publish(result, ticket)
     }
+    val inTrial: Boolean get() = pending
     val trialReady: Boolean get() = gate.ticket() != null && connected && !pending && service?.asBinder()?.isBinderAlive == true && hasPermission()
 
     fun cancelTrial() { gate.invalidate("사용자가 예약된 OFF 시험을 취소했습니다.") }
@@ -171,32 +180,75 @@ object DisplayControl {
         return gate.ticket() ?: error("RECOVERY_NOT_VERIFIED")
     }
 
-    @Synchronized fun turnOff(seconds: Int, verified: Boolean, ticket: Long): String {
+    @Synchronized fun turnOff(seconds: Int, verified: Boolean, ticket: Long, useDirectTouch: Boolean = false): String {
         check(connected) { "ACTIVE_CONNECTION_REQUIRED" }
         check(!pending) { "RESTORE_FIRST" }
         gate.requireCurrent(ticket)
+        ShellTouchPolicy.requireOffDuration(useDirectTouch, seconds)
         val remote = bound()
         remote.arm(owner, verified)
+        directTouch?.close(); directTouch = null
+        val touchTrial = if (useDirectTouch) remote.prepareTouch(owner, true) else null
+        if (touchTrial != null) directDiagnostics = remote.touchDiagnostics()
+        RemoteAccessibilityService.stopTouch()
         wakeLock?.acquire((seconds + 10) * 1000L)
         pending = true; gate.invalidate("한 번의 OFF 시험에 사전 검사를 사용했습니다.")
         deadline = android.os.SystemClock.elapsedRealtime() + seconds * 1000L
         com.galaxyremote.app.interaction.InteractionDiagnostics.trace.phase(com.galaxyremote.app.interaction.InteractionTrace.Phase.OFF_REQUESTED)
-        return try { publish(remote.turnOff(seconds)) } catch (error: Exception) {
+        return try {
+            val report = remote.turnOff(seconds)
+            if (touchTrial != null) directTouch = ShellTouchClient(remote, touchTrial) { directDiagnostics = it }
+            publish(report)
+        } catch (error: Exception) {
             restore(); throw error
         }
     }
+    @Synchronized fun startTouchOnlyTrial(ticket: Long): String {
+        check(connected) { "ACTIVE_CONNECTION_REQUIRED" }
+        check(!pending) { "RESTORE_FIRST" }
+        gate.requireCurrent(ticket)
+        val remote = bound()
+        remote.arm(owner, true)
+        val trial = remote.prepareTouch(owner, true)
+        directDiagnostics = remote.touchDiagnostics()
+        RemoteAccessibilityService.stopTouch()
+        pending = true; gate.invalidate("30초 화면 ON 직접 터치 비교에 사전 검사를 사용했습니다.")
+        deadline = android.os.SystemClock.elapsedRealtime() + 30_000
+        wakeLock?.acquire(40_000)
+        directTouch?.close(); directTouch = ShellTouchClient(remote, trial) { directDiagnostics = it }
+        status = "30초 동안 Shizuku 직접 터치를 비교합니다. 화면 전원 OFF 명령은 실행하지 않았습니다. 대상 앱 반응은 직접 확인하세요."
+        return status
+    }
+    fun releaseDirectPointers() { directTouch?.cancelPointers() }
+    fun routeDirectTouch(command: JSONObject, finish: (Boolean, String?) -> Unit): Boolean {
+        val client = directTouch ?: return false
+        if (!client.accepts(command.optString("type"))) return false
+        if (!connected || !pending || !hasPermission() || android.os.SystemClock.elapsedRealtime() >= deadline) {
+            client.close(); finish(false, "SHELL_TOUCH_STALE"); return true
+        }
+        client.submit(command, finish)
+        return true
+    }
     @Synchronized fun restore(reason: String = "복구·입력 해제를 요청했습니다."): String {
         com.galaxyremote.app.interaction.InteractionDiagnostics.trace.phase(com.galaxyremote.app.interaction.InteractionTrace.Phase.RESTORE_REQUESTED)
+        directTouch?.close()
         releaseInputAndWake(); gate.invalidate(reason)
+        var restoreAccepted = false
         val result = try {
-            service?.restore()?.let { publish(it) } ?: "shell 서비스가 없습니다. 외부·시간 제한 복구 경로와 실제 패널을 확인하세요."
+            service?.restore()?.let {
+                restoreAccepted = JSONObject(it).optBoolean("success")
+                try { directDiagnostics = service?.touchDiagnostics() ?: directDiagnostics } catch (_: Exception) { }
+                publish(it)
+            } ?: "shell 서비스가 없습니다. 외부·시간 제한 복구 경로와 실제 패널을 확인하세요."
         } catch (error: Exception) { recordFailure(error) + " 외부 복구 경로를 확인하세요." }
+        if (restoreAccepted) directTouch = null
         pending = false; status = result
         return result
     }
     @Synchronized fun sessionConnected(value: Boolean) {
         connected = value
         if (!value && BuildConfig.DISPLAY_CONTROL_EXPERIMENTAL) {
+            directTouch?.close()
             gate.invalidate("WebRTC 연결이 끊겼거나 세션을 교체했습니다.")
             io.execute { restore("WebRTC 연결 해제에 따른 안전 복구를 처리했습니다.") }
         }

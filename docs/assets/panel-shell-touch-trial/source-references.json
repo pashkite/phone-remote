@@ -1,0 +1,17 @@
+[
+  {
+    "url": "https://raw.githubusercontent.com/Genymobile/scrcpy/master/server/src/main/java/com/genymobile/scrcpy/wrappers/InputManager.java",
+    "sha256": "3b380b97bdeb463e2b0965d29572bb3b7aa3fdf33a92c8dc6265dfcec0c1ec96",
+    "bytes": 6006
+  },
+  {
+    "url": "https://raw.githubusercontent.com/Genymobile/scrcpy/master/server/src/main/java/com/genymobile/scrcpy/device/Device.java",
+    "sha256": "5b843e2a6911871845ea94d42d14a0f3604095e2364bf7e82a63107d760c69ff",
+    "bytes": 12948
+  },
+  {
+    "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/android16-release/services/accessibility/java/com/android/server/accessibility/MotionEventInjector.java",
+    "sha256": "44f44899ea98bbec8736243464f3cc3a3155640d735767e16f5e69b0e9257062",
+    "bytes": 24920
+  }
+]

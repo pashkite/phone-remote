@@ -3,7 +3,7 @@ package com.galaxyremote.app.interaction
 /** Process-local counters only: never store coordinates, content, app names, IDs or input text. */
 internal class InteractionTrace(private val clock: () -> Long = { System.nanoTime() / 1_000_000 }) {
     enum class Phase { BASELINE, OFF_REQUESTED, RESTORE_REQUESTED }
-    enum class Kind { TAP, LONG_PRESS, SWIPE, LIVE_TOUCH, MULTI_TOUCH, GLOBAL }
+    enum class Kind { TAP, LONG_PRESS, SWIPE, LIVE_TOUCH, MULTI_TOUCH, GLOBAL, SHELL_TOUCH }
     enum class Result { RECEIVED, SUBMITTED, COMPLETED, CANCELLED, REJECTED, ERROR }
     private var phase = Phase.BASELINE
     private val counts = linkedMapOf<Triple<Phase, Kind, Result>, Long>()
